@@ -9,6 +9,10 @@ import random
 #Folder z klasami
 dir = "dataset"
 
+#Folder po ujednoliceniu
+dir_out = "dataset_out"
+os.makedirs(dir_out, exist_ok=True)
+
 #Podfoldery
 classes = os.listdir(dir)
 
@@ -16,6 +20,34 @@ classes = os.listdir(dir)
 os.makedirs("eda", exist_ok=True)
 
 
+
+#=====[ Ujednolicenie ]=====
+print("Ujednolicanie klas...")
+
+#Tworzymy foldery dla ujednoliconych klas
+for c in classes:
+    c_in = os.path.join(dir, c)
+    c_out = os.path.join(dir_out, c)
+    os.makedirs(c_out, exist_ok=True)
+
+    #Zmieniamy rozmiary obrazów na 128x128
+    for img_name in os.listdir(c_in):
+        img_path = os.path.join(c_in, img_name)
+        img = cv2.imread(img_path)
+        if img is None:
+            continue
+
+        img = cv2.resize(img, (128, 128))
+        output_path = os.path.join(c_out, img_name)
+        cv2.imwrite(output_path, img)
+
+print("Ujednolicanie zakończone!")
+
+
+
+
+
+print("\nEDA")
 
 #=====[ Liczność klas ]=====
 print("Obliczanie liczności klas...")
@@ -26,7 +58,7 @@ counts = {}
 
 #Dla każdej klasy liczymy ilość obrazów
 for c in classes:
-    class_path = os.path.join(dir, c)
+    class_path = os.path.join(dir_out, c)
     images = [
         f for f in os.listdir(class_path)
         if os.path.isfile(os.path.join(class_path, f))
@@ -53,7 +85,7 @@ print("Tworzenie histogramów pikseli...")
 
 #Dla każdej z klas tworzymy listę pikseli z obrazów
 for c in classes:
-    class_path = os.path.join(dir, c)
+    class_path = os.path.join(dir_out, c)
     all_pixels = []
     #Każdy obraz konwertujemy do grayscale i dodajemy jego piksele do listy
     for img_name in os.listdir(class_path):
@@ -87,7 +119,7 @@ print("Tworzenie średnich obrazów...")
 
 #Dla każdej klasy tworzymy listę wszystkich obrazów.
 for c in classes:
-    class_path = os.path.join(dir, c)
+    class_path = os.path.join(dir_out, c)
     imgs = []
     for img_name in os.listdir(class_path):
         img_path = os.path.join(class_path, img_name)
@@ -124,7 +156,7 @@ heights = []
 
 #Badamy rozmiary obrazów z każdej klasy
 for c in classes:
-    class_path = os.path.join(dir, c)
+    class_path = os.path.join(dir_out, c)
     for img_name in os.listdir(class_path):
         img_path = os.path.join(class_path, img_name)
         img = cv2.imread(img_path)
@@ -156,7 +188,7 @@ print("Zapisywanie przykładowych obrazów...")
 
 #Dla każdej klasy tworzymy losowo zestawienie 5 przykładowych obrazów.
 for c in classes:
-    class_path = os.path.join(dir, c)
+    class_path = os.path.join(dir_out, c)
     images = os.listdir(class_path)
 
     #Losowo wybieramy próbkę zestawu obrazów.
@@ -181,4 +213,4 @@ for c in classes:
 
 print("Przykładowe obrazy zapisane")
 
-print("Zakończono.")
+print("Zakończono generowanie EDA.")
