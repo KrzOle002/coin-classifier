@@ -1,0 +1,11 @@
+Porównanie algorytmów klasteryzacji
+=======================================================
+Algorytm                       ARI      NMI   Silhouette
+-------------------------------------------------------
+K-Means (k=17)              0.0718   0.2288       0.1260
+DBSCAN (eps=75.1)           0.1087   0.4357       0.2562
+
+Objaśnienie metryk:
+  ARI (Adjusted Rand Index): zgodność z prawdziwymi etykietami, 1.0 = ideał
+  NMI (Normalized Mutual Info): wzajemna informacja, 1.0 = ideał
+  Silhouette: spójność klastrów, zakres [-1, 1], bliżej 1 = lepiej
