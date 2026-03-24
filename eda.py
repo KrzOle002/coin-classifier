@@ -83,6 +83,13 @@ print("Zapisano wykres liczności klas!")
 
 print("Tworzenie histogramów pikseli...")
 
+#Skala szarości
+colors = ('b', 'g', 'r')
+
+for i, col in enumerate(colors):
+    hist = cv2.calcHist([img], [i], None, [256], [0,256])
+    plt.plot(hist, color=col)
+
 #Dla każdej z klas tworzymy listę pikseli z obrazów
 for c in classes:
     class_path = os.path.join(dir_out, c)
@@ -131,6 +138,9 @@ for c in classes:
         imgs.append(img)
 
     #Mając pełną listę generujemy "średnią grafikę". Jest to średnia wartość pikseli wszystkich obrazów.
+    if len(imgs) == 0:
+        continue
+
     mean_img = np.mean(imgs, axis=0).astype("uint8")
 
     plt.figure()
@@ -156,7 +166,7 @@ heights = []
 
 #Badamy rozmiary obrazów z każdej klasy
 for c in classes:
-    class_path = os.path.join(dir_out, c)
+    class_path = os.path.join(dir, c)
     for img_name in os.listdir(class_path):
         img_path = os.path.join(class_path, img_name)
         img = cv2.imread(img_path)
