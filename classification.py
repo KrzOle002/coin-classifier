@@ -11,7 +11,8 @@ from sklearn.metrics import (
     classification_report,
     confusion_matrix,
     ConfusionMatrixDisplay,
-    accuracy_score
+    accuracy_score,
+    f1_score
 )
 
 os.makedirs("classification", exist_ok=True)
@@ -31,10 +32,19 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 print(f"Train: {len(X_train)} probek | Test: {len(X_test)} probek")
 
+#Parametry zgodne z planem projektu
 classifiers = {
-    "KNN (k=5)": KNeighborsClassifier(n_neighbors=5),
-    "SVM (RBF)": SVC(kernel="rbf", C=10, gamma="scale", random_state=42),
-    "Random Forest": RandomForestClassifier(n_estimators=200, random_state=42)
+    "KNN (k=7)": KNeighborsClassifier(
+        n_neighbors=7, metric="euclidean", weights="distance"
+    ),
+    "SVM (RBF)": SVC(
+        kernel="rbf", C=10, gamma="scale",
+        decision_function_shape="ovr", random_state=42
+    ),
+    "Random Forest": RandomForestClassifier(
+        n_estimators=200, max_depth=None,
+        min_samples_leaf=2, random_state=42
+    ),
 }
 
 results = {}
@@ -47,12 +57,17 @@ for name, clf in classifiers.items():
 
     y_pred = clf.predict(X_test)
 
-    acc = accuracy_score(y_test, y_pred)
+    acc  = accuracy_score(y_test, y_pred)
+    f1   = f1_score(y_test, y_pred, average="macro")
+
     print(f"Dokladnosc (test): {acc:.4f} ({acc*100:.2f}%)")
+    print(f"F1 macro (test):   {f1:.4f}")
 
     print("Cross-walidacja (5-fold)...")
-    cv_scores = cross_val_score(clf, X, y, cv=5, scoring="accuracy")
-    print(f"CV accuracy: {cv_scores.mean():.4f} +/- {cv_scores.std():.4f}")
+    cv_acc = cross_val_score(clf, X, y, cv=5, scoring="accuracy")
+    cv_f1  = cross_val_score(clf, X, y, cv=5, scoring="f1_macro")
+    print(f"CV accuracy: {cv_acc.mean():.4f} +/- {cv_acc.std():.4f}")
+    print(f"CV F1 macro: {cv_f1.mean():.4f} +/- {cv_f1.std():.4f}")
 
     report = classification_report(y_test, y_pred, target_names=classes)
     print(f"\nRaport klasyfikacji:\n{report}")
@@ -61,7 +76,9 @@ for name, clf in classifiers.items():
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(f"Klasyfikator: {name}\n")
         f.write(f"Dokladnosc (test): {acc:.4f}\n")
-        f.write(f"CV accuracy: {cv_scores.mean():.4f} +/- {cv_scores.std():.4f}\n\n")
+        f.write(f"F1 macro (test):   {f1:.4f}\n")
+        f.write(f"CV accuracy: {cv_acc.mean():.4f} +/- {cv_acc.std():.4f}\n")
+        f.write(f"CV F1 macro: {cv_f1.mean():.4f} +/- {cv_f1.std():.4f}\n\n")
         f.write(report)
     print(f"Raport zapisany: {report_path}")
 
@@ -78,39 +95,53 @@ for name, clf in classifiers.items():
     print(f"Macierz pomylek zapisana: {cm_path}")
 
     results[name] = {
-        "accuracy": acc,
-        "cv_mean": cv_scores.mean(),
-        "cv_std": cv_scores.std(),
-        "y_pred": y_pred
+        "accuracy":  acc,
+        "f1":        f1,
+        "cv_mean":   cv_acc.mean(),
+        "cv_std":    cv_acc.std(),
+        "cv_f1":     cv_f1.mean(),
     }
+
+#=====[ Tabela zbiorcza wyników ]=====
+
+print("\nTabela zbiorcza wynikow:")
+print(f"{'Klasyfikator':<20} {'Accuracy':>10} {'F1 macro':>10} {'CV Accuracy':>12} {'CV F1':>10}")
+print("-" * 65)
+for name, r in results.items():
+    print(f"{name:<20} {r['accuracy']:>10.4f} {r['f1']:>10.4f} {r['cv_mean']:>12.4f} {r['cv_f1']:>10.4f}")
+
+with open("classification/tabela_zbiorcza.txt", "w", encoding="utf-8") as f:
+    f.write(f"{'Klasyfikator':<20} {'Accuracy':>10} {'F1 macro':>10} {'CV Accuracy':>12} {'CV F1':>10}\n")
+    f.write("-" * 65 + "\n")
+    for name, r in results.items():
+        f.write(f"{name:<20} {r['accuracy']:>10.4f} {r['f1']:>10.4f} {r['cv_mean']:>12.4f} {r['cv_f1']:>10.4f}\n")
+print("Tabela zapisana: classification/tabela_zbiorcza.txt")
+
+#=====[ Wykres porównawczy — accuracy i F1 ]=====
 
 print("\nTworzenie wykresow porownawczych...")
 
 names = list(results.keys())
-accuracies = [results[n]["accuracy"] for n in names]
-cv_means = [results[n]["cv_mean"] for n in names]
-cv_stds = [results[n]["cv_std"] for n in names]
-
 x = np.arange(len(names))
-width = 0.35
+width = 0.2
 
-fig, ax = plt.subplots(figsize=(10, 6))
-bars1 = ax.bar(x - width/2, accuracies, width, label="Test accuracy", color="steelblue")
-bars2 = ax.bar(x + width/2, cv_means, width, yerr=cv_stds, label="CV accuracy (+/-std)", color="darkorange", capsize=5)
+fig, ax = plt.subplots(figsize=(12, 6))
+b1 = ax.bar(x - 1.5*width, [results[n]["accuracy"] for n in names], width, label="Test accuracy",  color="steelblue")
+b2 = ax.bar(x - 0.5*width, [results[n]["f1"]       for n in names], width, label="Test F1 macro",  color="cornflowerblue")
+b3 = ax.bar(x + 0.5*width, [results[n]["cv_mean"]  for n in names], width, label="CV accuracy",    color="darkorange")
+b4 = ax.bar(x + 1.5*width, [results[n]["cv_f1"]    for n in names], width, label="CV F1 macro",    color="sandybrown")
 
-for bar in bars1:
-    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.005,
-            f"{bar.get_height():.3f}", ha="center", va="bottom", fontsize=9)
-for bar in bars2:
-    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.005,
-            f"{bar.get_height():.3f}", ha="center", va="bottom", fontsize=9)
+for bars in [b1, b2, b3, b4]:
+    for bar in bars:
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.005,
+                f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=8)
 
 ax.set_xlabel("Klasyfikator")
-ax.set_ylabel("Dokladnosc")
-ax.set_title("Porownanie klasyfikatorow - dokladnosc na zbiorze testowym vs. cross-walidacja")
+ax.set_ylabel("Wynik")
+ax.set_title("Porownanie klasyfikatorow — Accuracy i F1 macro")
 ax.set_xticks(x)
 ax.set_xticklabels(names)
-ax.set_ylim(0, 1.05)
+ax.set_ylim(0, 1.1)
 ax.legend()
 ax.grid(axis="y", alpha=0.3)
 plt.tight_layout()

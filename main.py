@@ -62,7 +62,7 @@ def run_step(step, index, total):
 
 def main():
     separator("=")
-    print("  KLASYFIKACJA NOMINALOW MONET - POTOK PROJEKTU")
+    print("  KLASYFIKACJA NOMINALOW MONET ")
     print("  Autorzy: Krzysztof, Kacper, Julia")
     separator("=")
     print()
