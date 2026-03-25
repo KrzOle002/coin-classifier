@@ -15,11 +15,6 @@ STEPS = [
         "output_check": "pca/pca_data.npz",
     },
     {
-        "name": "Clustering - Klasteryzacja (K-Means + DBSCAN)",
-        "file": "clustering.py",
-        "output_check": "clustering/metryki_klasteryzacji.txt",
-    },
-    {
         "name": "Classification - Klasyfikatory (KNN, SVM, Random Forest)",
         "file": "classification.py",
         "output_check": "classification/porownanie_dokladnosci.png",
