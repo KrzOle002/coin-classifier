@@ -1,25 +1,52 @@
-## Pierwsze uruchomienie (każda osoba)
+# Coin Classifier
 
-## Wersja Pythona 3.12.3
+Klasyfikacja nominałów monet PLN i EUR przy użyciu algorytmów uczenia maszynowego.
 
-### 1. Sklonuj repozytorium
+## Wersja Pythona: 3.12.3
 
-```
-git clone https://github.com/KrzOle002/coin-classifier.git
-cd coin-classifier
-```
-
-### 2. Stwórz środowisko wirtualne
+## Instalacja
 
 ```
 python -m venv venv
 venv\Scripts\activate
-```
-
-### 3. Zainstaluj biblioteki
-
-```
 pip install -r requirements.txt
 ```
 
-### 4. Gotowe powinno działać uruchom swój plik
+## Uruchomienie
+
+```
+python main.py
+```
+
+Lub poszczególne kroki osobno:
+
+```
+python eda.py
+python pca.py
+python clustering.py
+python classification.py
+```
+
+## Struktura projektu
+
+```
+coin-classifier/
+├── dataset/          - zdjęcia monet (17 klas: gr_1, gr_2, ..., e_1, e_2, ...)
+├── dataset_out/      - ujednolicone obrazy 128x128 (generowane przez eda.py)
+├── eda/              - wykresy EDA (generowane przez eda.py)
+├── pca/              - wyniki PCA (generowane przez pca.py)
+├── clustering/       - wyniki klasteryzacji (generowane przez clustering.py)
+├── classification/   - wyniki klasyfikacji (generowane przez classification.py)
+├── eda.py            - eksploracja danych i ujednolicenie
+├── pca.py            - redukcja wymiarowosci
+├── clustering.py     - klasteryzacja K-Means i DBSCAN
+├── classification.py - klasyfikacja KNN, SVM, Random Forest
+├── main.py           - uruchamia wszystkie kroki po kolei
+└── requirements.txt
+```
+
+## Klasy (17)
+
+PLN: gr_1, gr_2, gr_5, gr_10, gr_20, gr_50, zl_1, zl_2, zl_5
+
+EUR: ct_1, ct_2, ct_5, ct_10, ct_20, ct_50, e_1, e_2
