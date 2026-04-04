@@ -15,12 +15,14 @@ from sklearn.metrics import (
     f1_score
 )
 
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from preprocessing import prepare_dataset
+
 os.makedirs("classification", exist_ok=True)
 
-print("Wczytywanie danych po PCA...")
-data = np.load("pca/pca_data.npz", allow_pickle=True)
-X = data["X"]
-y = data["y"]
+print("Wczytywanie i przetwarzanie danych...")
+X, y = prepare_dataset()
 
 classes = sorted(np.unique(y))
 print(f"Zaladowano {len(X)} probek, {len(classes)} klas.")

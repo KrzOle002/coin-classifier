@@ -3,6 +3,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from preprocessing import prepare_dataset
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
@@ -17,27 +20,21 @@ from sklearn.metrics import (
 
 os.makedirs("hard_pairs", exist_ok=True)
 
-print("Wczytywanie danych po PCA...")
-data = np.load("pca/pca_data.npz", allow_pickle=True)
-X_all = data["X"]
-y_all = data["y"]
+print("Wczytywanie i przetwarzanie danych...")
+X_all, y_all = prepare_dataset()
 
 #=====[ Definicja trudnych par ]=====
 #
 # Pary klas które najczesciej sie mylily w classification.py.
 # Kazda para to dwie klasy ktore sa podobne wizualnie —
-# ten sam kolor lub podobny rozmiar w przestrzeni PCA.
+# ten sam kolor lub podobny rozmiar.
 
 hard_pairs = [
-    ("gr_1",  "gr_2"),    # oba male, srebrne grosze
-    ("gr_1",  "gr_20"),   # srebrne, mylone w KNN
-    ("gr_10", "gr_20"),   # male srebrne grosze
-    ("gr_50", "zl_1"),    # srebrne, podobny rozmiar
-    ("gr_1",  "zl_2"),    # gr_1 mylone z zl_2 az 4 razy w KNN
     ("ct_1",  "ct_2"),    # male miedziane eurocenty
     ("ct_10", "ct_20"),   # zolte eurocenty
-    ("zl_1",  "e_1"),  
-    ("zl_5",   "e_2"),    
+    ("ct_1",  "ct_5"),    # male miedziane eurocenty
+    ("ct_20", "ct_50"),   # zolte eurocenty
+    ("e_1",   "e_2"),     # srebrno-zolte euro
 ]
 
 classifiers = {

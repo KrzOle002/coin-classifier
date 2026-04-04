@@ -65,13 +65,13 @@ for c in classes:
 
 #Zapis do wykresu
 plt.figure(figsize=(12, 5))
-colors = ["steelblue" if c.startswith(("gr_", "zl_")) else "darkorange" for c in counts.keys()]
+colors = ["steelblue" if c.startswith("ct_") else "darkorange" for c in counts.keys()]
 bars = plt.bar(counts.keys(), counts.values(), color=colors)
 for bar in bars:
     plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.3,
              str(int(bar.get_height())), ha="center", va="bottom", fontsize=8)
 plt.xticks(rotation=90)
-plt.title("Licznosci klas (niebieski = PLN, pomaranczowy = EUR)")
+plt.title("Licznosci klas (niebieski = centy, pomaranczowy = euro)")
 plt.ylabel("Liczba obrazow")
 plt.tight_layout()
 plt.savefig("eda/licznosc_klas.png")

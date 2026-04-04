@@ -10,14 +10,14 @@ STEPS = [
         "output_check": "dataset_out",
     },
     {
-        "name": "PCA - Redukcja wymiarowosci",
-        "file": "pca.py",
-        "output_check": "pca/pca_data.npz",
-    },
-    {
         "name": "Classification - Klasyfikatory (KNN, SVM, Random Forest)",
         "file": "classification.py",
         "output_check": "classification/porownanie_dokladnosci.png",
+    },
+    {
+        "name": "Hard Pairs - Analiza trudnych par klas",
+        "file": "hard_pairs.py",
+        "output_check": "hard_pairs/porownanie_par.png",
     },
 ]
 
@@ -87,9 +87,8 @@ def main():
     print("Wyniki zapisane w folderach:")
     print("  dataset_out/    - ujednolicone obrazy")
     print("  eda/            - wykresy eksploracji danych")
-    print("  pca/            - redukcja wymiarowosci i eigencoins")
-    print("  clustering/     - klasteryzacja K-Means i DBSCAN")
     print("  classification/ - klasyfikatory i macierze pomylek")
+    print("  hard_pairs/     - analiza trudnych par klas")
 
 
 if __name__ == "__main__":
