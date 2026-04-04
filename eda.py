@@ -81,15 +81,14 @@ print("Zapisano wykres liczności klas!")
 
 
 
-#=====[ Histogramy — grayscale i RGB ]=====
+#=====[ Histogramy — grayscale ]=====
 
 print("Tworzenie histogramów pikseli...")
 
-#Dla każdej z klas tworzymy histogramy — jeden grayscale i jeden RGB
+#Dla każdej z klas tworzymy histogram grayscale
 for c in classes:
     class_path = os.path.join(dir_out, c)
     all_pixels_gray = []
-    all_r, all_g, all_b = [], [], []
 
     for img_name in os.listdir(class_path):
         img_path = os.path.join(class_path, img_name)
@@ -97,35 +96,15 @@ for c in classes:
         if img is None:
             continue
 
-        #Histogram grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         all_pixels_gray.extend(gray.flatten())
 
-        #Histogram RGB — osobno dla każdego kanału
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        all_r.extend(img_rgb[:, :, 0].flatten())
-        all_g.extend(img_rgb[:, :, 1].flatten())
-        all_b.extend(img_rgb[:, :, 2].flatten())
-
-    #Histogram grayscale
     plt.figure()
     plt.hist(all_pixels_gray, bins=256, color="gray")
     plt.title(f"Histogram pikseli (grayscale) - {c}")
     plt.xlabel("Intensywnosc")
     plt.ylabel("Liczba pikseli")
     plt.savefig(f"eda/histogram_{c}.png")
-    plt.close()
-
-    #Histogram RGB
-    plt.figure(figsize=(8, 4))
-    plt.hist(all_r, bins=256, color="red",   alpha=0.5, label="R")
-    plt.hist(all_g, bins=256, color="green", alpha=0.5, label="G")
-    plt.hist(all_b, bins=256, color="blue",  alpha=0.5, label="B")
-    plt.title(f"Histogram RGB - {c}")
-    plt.xlabel("Intensywnosc")
-    plt.ylabel("Liczba pikseli")
-    plt.legend()
-    plt.savefig(f"eda/histogram_rgb_{c}.png")
     plt.close()
 
 print("Histogramy zapisane!")
