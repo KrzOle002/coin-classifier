@@ -7,9 +7,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from preprocessing import prepare_dataset
 from sklearn.model_selection import train_test_split
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     classification_report,
     confusion_matrix,
@@ -38,8 +38,8 @@ hard_pairs = [
 ]
 
 classifiers = {
-    "KNN (k=7)": KNeighborsClassifier(
-        n_neighbors=7, metric="euclidean", weights="distance"
+    "Logistic Regression": LogisticRegression(
+        max_iter=1000, random_state=42
     ),
     "SVM (RBF)": SVC(
         kernel="rbf", C=10, gamma="scale",
@@ -158,7 +158,7 @@ for cls_a, cls_b in hard_pairs:
 #=====[ Tabela zbiorcza ]=====
 
 print("\nTabela zbiorcza trudnych par:")
-header = f"{'Para':<20} {'KNN acc':>9} {'SVM acc':>9} {'RF acc':>9}"
+header = f"{'Para':<20} {'LR acc':>9} {'SVM acc':>9} {'RF acc':>9}"
 print(header)
 print("-" * 50)
 
@@ -167,7 +167,7 @@ with open("hard_pairs/tabela_trudnych_par.txt", "w", encoding="utf-8") as f:
     f.write("-" * 50 + "\n")
     for r in all_results:
         line = (f"{r['para']:<20} "
-                f"{r['KNN (k=7)']['acc']:>9.3f} "
+                f"{r['Logistic Regression']['acc']:>9.3f} "
                 f"{r['SVM (RBF)']['acc']:>9.3f} "
                 f"{r['Random Forest']['acc']:>9.3f}")
         print(line)

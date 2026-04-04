@@ -4,9 +4,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     classification_report,
     confusion_matrix,
@@ -36,8 +36,8 @@ print(f"Train: {len(X_train)} probek | Test: {len(X_test)} probek")
 
 #Parametry zgodne z planem projektu
 classifiers = {
-    "KNN (k=7)": KNeighborsClassifier(
-        n_neighbors=7, metric="euclidean", weights="distance"
+    "Logistic Regression": LogisticRegression(
+        max_iter=1000, random_state=42
     ),
     "SVM (RBF)": SVC(
         kernel="rbf", C=10, gamma="scale",

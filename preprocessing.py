@@ -1,8 +1,11 @@
 import os
 import cv2
 import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
 dir = "dataset_out"
+N_PCA_COMPONENTS = 50
 
 
 def load_data():
@@ -29,18 +32,20 @@ def load_data():
 
 def extract_features(img):
     """
-    Wyciąga cechy geometryczne monety z obrazu:
-    - liczba wykrytych okręgów (HoughCircles) — kluczowa dla odróżnienia np. 2ct vs 2 euro
-    - promień największego okręgu (rozmiar monety)
-    - rozpiętość promieni (różnica max-min) — jak bardzo okręgi są różnej wielkości
-    - stosunek najmniejszego do największego promienia — czy okręgi są koncentryczne
-    - liczba konturów zewnętrznych — złożoność krawędzi
-    - pole największego konturu
-    - obwód największego konturu
-    - współczynnik kolistości (4π*pole/obwód²) — jak bardzo kontur przypomina okrąg
+    Wyciąga cechy krawędziowe monety:
+    - obraz krawędzi Canny spłaszczony do wektora (główna informacja dla klasyfikatora)
+    - cechy geometryczne z HoughCircles i konturów jako dodatkowy kontekst
     """
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    if len(img.shape) == 3:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = img
     blurred = cv2.GaussianBlur(gray, (7, 7), 1.5)
+
+    # =====[ Krawędzie Canny — główna cecha ]=====
+    edges = cv2.Canny(blurred, 40, 120)
+    edges_small = cv2.resize(edges, (32, 32))
+    edges_flat = (edges_small / 255.0).flatten()  # wektor 32*32 = 1024 wartości
 
     # =====[ Okręgi — HoughCircles ]=====
     circles = cv2.HoughCircles(
@@ -59,41 +64,31 @@ def extract_features(img):
         radii = sorted([c[2] for c in circles], reverse=True)
         num_circles = len(radii)
         max_radius = radii[0]
-        radius_spread = radii[0] - radii[-1]
         radius_ratio = radii[-1] / radii[0] if radii[0] > 0 else 0
     else:
         num_circles = 0
         max_radius = 0
-        radius_spread = 0
         radius_ratio = 0
 
     # =====[ Kontury ]=====
-    edges = cv2.Canny(blurred, 40, 120)
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    num_contours = len(contours)
-
     if contours:
         largest = max(contours, key=cv2.contourArea)
         area = cv2.contourArea(largest)
         perimeter = cv2.arcLength(largest, True)
-        # Współczynnik kolistości: 1.0 = idealny okrąg, im mniej tym bardziej nieregularny
         circularity = (4 * np.pi * area / (perimeter ** 2)) if perimeter > 0 else 0
     else:
         area = 0
         perimeter = 0
         circularity = 0
 
-    return np.array([
-        num_circles,
-        max_radius,
-        radius_spread,
-        radius_ratio,
-        num_contours,
-        area,
-        perimeter,
-        circularity,
+    geometric = np.array([
+        num_circles, max_radius, radius_ratio,
+        area, perimeter, circularity,
     ], dtype=np.float32)
+
+    # Łączymy obraz krawędzi (16384) + cechy geometryczne (6)
+    return np.concatenate([edges_flat, geometric])
 
 
 def prepare_dataset():
@@ -108,16 +103,29 @@ def prepare_dataset():
         X.append(feats)
         y.append(label)
 
-    return np.array(X), np.array(y)
+    X = np.array(X)
+    y = np.array(y)
+
+    # =====[ Standaryzacja ]=====
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # =====[ PCA — redukcja wymiarowości ]=====
+    n_components = min(N_PCA_COMPONENTS, X_scaled.shape[0] - 1, X_scaled.shape[1])
+    pca = PCA(n_components=n_components)
+    X_pca = pca.fit_transform(X_scaled)
+
+    explained = np.sum(pca.explained_variance_ratio_) * 100
+    print(f"PCA: {X.shape[1]} cech → {n_components} komponentów "
+          f"({explained:.1f}% wyjasnionej wariancji)")
+
+    return X_pca, y
 
 
 def main():
     X, y = prepare_dataset()
-    print("Shape X:", X.shape)
+    print("Shape X po PCA:", X.shape)
     print("Shape y:", y.shape)
-    print("Przyklad cech (pierwsza probka):", X[0])
-    print("Nazwy cech: num_circles, max_radius, radius_spread, radius_ratio, "
-          "num_contours, area, perimeter, circularity")
 
 
 if __name__ == "__main__":

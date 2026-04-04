@@ -38,6 +38,7 @@ for c in classes:
             continue
 
         img = cv2.resize(img, (128, 128))
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         output_path = os.path.join(c_out, img_name)
         cv2.imwrite(output_path, img)
 
@@ -162,8 +163,7 @@ for c in classes:
         if img is None:
             continue
 
-        #Zmienna "_" reprezentuje liczbę kanałów, która w tym wypadku nie jest nam potrzebna
-        h, w, _ = img.shape
+        h, w = img.shape[:2]
         widths.append(w)
         heights.append(h)
 
