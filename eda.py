@@ -130,10 +130,11 @@ for c in classes:
 
     #Mając pełną listę generujemy "średnią grafikę". Jest to średnia wartość pikseli wszystkich obrazów.
     mean_img = np.mean(imgs, axis=0).astype("uint8")
+    mean_gray = cv2.cvtColor(mean_img, cv2.COLOR_BGR2GRAY)
 
     plt.figure()
 
-    plt.imshow(cv2.cvtColor(mean_img, cv2.COLOR_BGR2RGB))
+    plt.imshow(mean_gray, cmap="gray")
     plt.axis("off")
     plt.title(f"Mean image - {c}")
 
@@ -197,11 +198,11 @@ for c in classes:
     for i, img_name in enumerate(sample):
         img_path = os.path.join(class_path, img_name)
         img = cv2.imread(img_path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         #Wybrane obrazy są rozmieszczane "w rzędzie".
         plt.subplot(1, 5, i+1)
-        plt.imshow(img)
+        plt.imshow(gray, cmap="gray")
         plt.axis("off")
 
     plt.suptitle(c)
