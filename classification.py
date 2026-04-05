@@ -3,7 +3,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os
-from sklearn.model_selection import train_test_split, cross_val_score
+import joblib
+from sklearn.model_selection import cross_val_score
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
@@ -11,7 +12,7 @@ from sklearn.metrics import (
     confusion_matrix,
     ConfusionMatrixDisplay,
     accuracy_score,
-    f1_score
+    f1_score,
 )
 
 import sys
@@ -19,21 +20,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from preprocessing import prepare_dataset
 
 os.makedirs("classification", exist_ok=True)
+os.makedirs("models", exist_ok=True)
 
 print("Wczytywanie i przetwarzanie danych...")
-X, y, scaler = prepare_dataset()
+# prepare_dataset() robi podział PRZED augmentacją i fituje scaler tylko na train
+X_train, X_test, y_train, y_test, scaler = prepare_dataset()
 
-classes = sorted(np.unique(y))
-print(f"Zaladowano {len(X)} probek, {len(classes)} klas.")
-print(f"Klasy: {classes}")
-
-print("\nPodzial danych (80% train / 20% test)...")
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
-)
+classes = sorted(np.unique(y_train))
+print(f"Zaladowano dane. Klasy: {classes}")
 print(f"Train: {len(X_train)} probek | Test: {len(X_test)} probek")
 
-#Parametry zgodne z planem projektu
+# Parametry zgodne z planem projektu
 classifiers = {
     "Logistic Regression": LogisticRegression(
         max_iter=1000, random_state=42
@@ -47,6 +44,7 @@ classifiers = {
 }
 
 results = {}
+trained_models = {}
 
 for name, clf in classifiers.items():
     print(f"\n--- {name} ---")
@@ -62,17 +60,17 @@ for name, clf in classifiers.items():
     print(f"Dokladnosc (test): {acc:.4f} ({acc*100:.2f}%)")
     print(f"F1 macro (test):   {f1:.4f}")
 
-    print("Cross-walidacja (3-fold)...")
-    cv_acc = cross_val_score(clf, X, y, cv=3, scoring="accuracy", n_jobs=-1)
-    cv_f1  = cross_val_score(clf, X, y, cv=3, scoring="f1_macro", n_jobs=-1)
+    # Cross-walidacja na zbiorze treningowym (nie całym — bez leakage)
+    print("Cross-walidacja (3-fold na danych treningowych)...")
+    cv_acc = cross_val_score(clf, X_train, y_train, cv=3, scoring="accuracy", n_jobs=-1)
+    cv_f1  = cross_val_score(clf, X_train, y_train, cv=3, scoring="f1_macro",  n_jobs=-1)
     print(f"CV accuracy: {cv_acc.mean():.4f} +/- {cv_acc.std():.4f}")
     print(f"CV F1 macro: {cv_f1.mean():.4f} +/- {cv_f1.std():.4f}")
-
 
     report = classification_report(y_test, y_pred, target_names=classes)
     print(f"\nRaport klasyfikacji:\n{report}")
 
-    report_path = f"classification/report_{name.replace(' ', '_').replace('(', '').replace(')', '')}.txt"
+    report_path = f"classification/report_{name.replace(' ', '_')}.txt"
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(f"Klasyfikator: {name}\n")
         f.write(f"Dokladnosc (test): {acc:.4f}\n")
@@ -89,7 +87,7 @@ for name, clf in classifiers.items():
     disp.plot(ax=ax, xticks_rotation=45, colorbar=True)
     ax.set_title(f"Macierz pomylek - {name}")
     plt.tight_layout()
-    cm_path = f"classification/confusion_{name.replace(' ', '_').replace('(', '').replace(')', '')}.png"
+    cm_path = f"classification/confusion_{name.replace(' ', '_')}.png"
     plt.savefig(cm_path, dpi=150)
     plt.close()
     print(f"Macierz pomylek zapisana: {cm_path}")
@@ -100,7 +98,18 @@ for name, clf in classifiers.items():
         "cv_mean":   cv_acc.mean(),
         "cv_std":    cv_acc.std(),
         "cv_f1":     cv_f1.mean(),
+        "model":     clf,
     }
+    trained_models[name] = clf
+
+    # Zapis modelu do pliku
+    model_filename = f"models/{name.replace(' ', '_')}.joblib"
+    joblib.dump(clf, model_filename)
+    print(f"Model zapisany: {model_filename}")
+
+# Zapis scalera (potrzebny do predykcji na nowych danych)
+joblib.dump(scaler, "models/scaler.joblib")
+print("\nScaler zapisany: models/scaler.joblib")
 
 #=====[ Tabela zbiorcza wyników ]=====
 
@@ -150,3 +159,4 @@ plt.close()
 
 print("Zapisano wykres porownawczy!")
 print("\nZakonczona klasyfikacja.")
+print(f"Modele zapisane w folderze: models/")

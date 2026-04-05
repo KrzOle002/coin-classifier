@@ -1,20 +1,20 @@
 Klasyfikator: Random Forest
-Dokladnosc (test): 0.8083
-F1 macro (test):   0.8090
-CV accuracy: 0.7412 +/- 0.0360
-CV F1 macro: 0.7422 +/- 0.0352
+Dokladnosc (test): 0.9958
+F1 macro (test):   0.9958
+CV accuracy: 0.9900 +/- 0.0032
+CV F1 macro: 0.9900 +/- 0.0032
 
               precision    recall  f1-score   support
 
-        ct_1       0.71      0.88      0.79       210
-       ct_10       0.91      0.79      0.84       210
-        ct_2       0.75      0.71      0.73       210
-       ct_20       0.87      0.84      0.85       210
-        ct_5       0.75      0.83      0.79       210
-       ct_50       0.85      0.76      0.80       210
-         e_1       0.80      0.86      0.83       210
-         e_2       0.88      0.80      0.84       210
+        ct_1       1.00      1.00      1.00        30
+       ct_10       1.00      1.00      1.00        30
+        ct_2       1.00      1.00      1.00        30
+       ct_20       1.00      1.00      1.00        30
+        ct_5       1.00      1.00      1.00        30
+       ct_50       1.00      1.00      1.00        30
+         e_1       0.97      1.00      0.98        30
+         e_2       1.00      0.97      0.98        30
 
-    accuracy                           0.81      1680
-   macro avg       0.81      0.81      0.81      1680
-weighted avg       0.81      0.81      0.81      1680
+    accuracy                           1.00       240
+   macro avg       1.00      1.00      1.00       240
+weighted avg       1.00      1.00      1.00       240

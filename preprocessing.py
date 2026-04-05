@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 from sklearn.preprocessing import StandardScaler
+from skimage.feature import hog
 
 dir = "dataset_out"
 
@@ -120,18 +121,29 @@ def extract_digit_features(gray, cx, cy, inner_radius):
 
 def extract_features(img):
     """
-    Wyciąga cechy krawędziowe monety:
-    - obraz krawędzi Canny 128x128 spłaszczony do wektora (16384 wartości)
+    Wyciąga cechy monety:
+    - HOG (Histogram of Oriented Gradients) — ~1764 cech zamiast 16384 raw Canny.
+      HOG koduje krawędzie i gradienty efektywniej, jest mniej wrażliwy na szum
+      i nie wymaga tak dużo pamięci ani czasu treningu.
     - cechy geometryczne z HoughCircles i konturów (6 wartości)
     - cechy cyfry ze środka monety przez OpenCV (6 wartości)
-    Razem: 16396 cech
+    Razem: ~1776 cech (zamiast wcześniejszych 16396)
     """
     gray = img if len(img.shape) == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (7, 7), 1.5)
 
-    # =====[ Krawędzie Canny ]=====
-    edges = cv2.Canny(blurred, 40, 120)
-    edges_flat = (edges / 255.0).flatten()  # 128*128 = 16384 wartości
+    # =====[ HOG — Histogram of Oriented Gradients ]=====
+    # pixels_per_cell=(16,16), cells_per_block=(2,2), 9 orientacji
+    # dla obrazu 128x128: (128/16)=8 komórek na oś → 8x8=64 komórki
+    # po normalizacji blokowej (2x2): 7x7=49 bloków → 49*4*9 = 1764 cech
+    hog_feats = hog(
+        gray,
+        orientations=9,
+        pixels_per_cell=(16, 16),
+        cells_per_block=(2, 2),
+        block_norm="L2-Hys",
+        feature_vector=True,
+    )
 
     # =====[ Okręgi — HoughCircles ]=====
     circles = cv2.HoughCircles(
@@ -154,7 +166,8 @@ def extract_features(img):
         cx_inner = cy_inner = gray.shape[0] // 2
         r_inner  = gray.shape[0] // 4
 
-    # =====[ Kontury zewnętrzne monety ]=====
+    # =====[ Kontury zewnętrzne monety (z krawędzi Canny) ]=====
+    edges = cv2.Canny(blurred, 40, 120)
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if contours:
         largest    = max(contours, key=cv2.contourArea)
@@ -172,38 +185,64 @@ def extract_features(img):
     # =====[ Cechy cyfry ze środka monety ]=====
     digit_feats = extract_digit_features(gray, cx_inner, cy_inner, r_inner)
 
-    return np.concatenate([edges_flat, geometric, digit_feats])  # 16396 cech
+    return np.concatenate([hog_feats, geometric, digit_feats])
 
 
-def prepare_dataset():
+def prepare_dataset(augment_train_only=True):
+    """
+    Wczytuje dane, dzieli na train/test, augmentuje TYLKO zbiór treningowy,
+    a scaler fituje TYLKO na danych treningowych — bez data leakage.
+
+    Zwraca: X_train, X_test, y_train, y_test, scaler
+    """
+    from sklearn.model_selection import train_test_split
+
     images, labels = load_data()
+    labels = np.array(labels)
 
-    X = []
-    y = []
+    print(f"Wczytano {len(images)} obrazow oryginalnych.")
 
-    print(f"Wczytano {len(images)} obrazow. Trwa augmentacja...")
-    for img, label in zip(images, labels):
-        img = cv2.resize(img, (128, 128))
+    # Podział PRZED augmentacją — zapobiega data leakage
+    idx = np.arange(len(images))
+    idx_train, idx_test = train_test_split(idx, test_size=0.2, random_state=42, stratify=labels)
+
+    print(f"Podzial: {len(idx_train)} train / {len(idx_test)} test (przed augmentacja)")
+
+    # ===[ Zbiór treningowy — z augmentacją ]===
+    X_train_list, y_train_list = [], []
+    for i in idx_train:
+        img = cv2.resize(images[i], (128, 128))
         for variant in augment(img):
-            X.append(extract_features(variant))
-            y.append(label)
+            X_train_list.append(extract_features(variant))
+            y_train_list.append(labels[i])
 
-    print(f"Po augmentacji: {len(X)} probek (7x wiecej niz oryginalnie)")
+    # ===[ Zbiór testowy — BEZ augmentacji, tylko oryginały ]===
+    X_test_list, y_test_list = [], []
+    for i in idx_test:
+        img = cv2.resize(images[i], (128, 128))
+        X_test_list.append(extract_features(img))
+        y_test_list.append(labels[i])
 
-    X = np.array(X)
-    y = np.array(y)
+    X_train = np.array(X_train_list, dtype=np.float32)
+    X_test  = np.array(X_test_list,  dtype=np.float32)
+    y_train = np.array(y_train_list)
+    y_test  = np.array(y_test_list)
 
-    # Standaryzacja — wyrównuje skale cech (Canny 0/1 vs area w tysiącach)
+    print(f"Po augmentacji: {len(X_train)} probek treningowych (7x), {len(X_test)} testowych")
+    print(f"Wymiar cech: {X_train.shape[1]}")
+
+    # Scaler fitowany TYLKO na danych treningowych
     scaler = StandardScaler()
-    X = scaler.fit_transform(X)
+    X_train = scaler.fit_transform(X_train)
+    X_test  = scaler.transform(X_test)
 
-    return X, y, scaler
+    return X_train, X_test, y_train, y_test, scaler
 
 
 def main():
-    X, y, _ = prepare_dataset()
-    print("Shape X:", X.shape)
-    print("Shape y:", y.shape)
+    X_train, X_test, y_train, y_test, _ = prepare_dataset()
+    print("Shape X_train:", X_train.shape)
+    print("Shape X_test:",  X_test.shape)
 
 
 if __name__ == "__main__":

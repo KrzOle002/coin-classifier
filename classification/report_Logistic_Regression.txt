@@ -1,20 +1,20 @@
 Klasyfikator: Logistic Regression
-Dokladnosc (test): 0.8101
-F1 macro (test):   0.8106
-CV accuracy: 0.7569 +/- 0.0355
-CV F1 macro: 0.7576 +/- 0.0352
+Dokladnosc (test): 0.9708
+F1 macro (test):   0.9709
+CV accuracy: 0.9659 +/- 0.0041
+CV F1 macro: 0.9659 +/- 0.0041
 
               precision    recall  f1-score   support
 
-        ct_1       0.71      0.79      0.75       210
-       ct_10       0.88      0.78      0.83       210
-        ct_2       0.75      0.75      0.75       210
-       ct_20       0.82      0.81      0.82       210
-        ct_5       0.76      0.81      0.78       210
-       ct_50       0.82      0.78      0.80       210
-         e_1       0.89      0.85      0.87       210
-         e_2       0.86      0.91      0.89       210
+        ct_1       0.94      1.00      0.97        30
+       ct_10       0.97      0.97      0.97        30
+        ct_2       0.97      0.97      0.97        30
+       ct_20       1.00      0.97      0.98        30
+        ct_5       1.00      0.97      0.98        30
+       ct_50       0.94      0.97      0.95        30
+         e_1       0.97      0.93      0.95        30
+         e_2       1.00      1.00      1.00        30
 
-    accuracy                           0.81      1680
-   macro avg       0.81      0.81      0.81      1680
-weighted avg       0.81      0.81      0.81      1680
+    accuracy                           0.97       240
+   macro avg       0.97      0.97      0.97       240
+weighted avg       0.97      0.97      0.97       240
