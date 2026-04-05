@@ -212,4 +212,52 @@ for c in classes:
 
 print("Przykładowe obrazy zapisane")
 
+
+
+#=====[ Wizualizacja HoughCircles ]=====
+
+print("Tworzenie wizualizacji wykrytych okręgów...")
+
+#Dla każdej klasy bierzemy pierwsze dostępne zdjęcie i rysujemy wykryte okręgi
+fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+
+for ax, c in zip(axes.flatten(), classes):
+    class_path = os.path.join(dir_out, c)
+    img_name = os.listdir(class_path)[0]
+    img = cv2.imread(os.path.join(class_path, img_name))
+    if img is None:
+        ax.axis("off")
+        continue
+
+    gray = img if len(img.shape) == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (7, 7), 1.5)
+
+    circles = cv2.HoughCircles(
+        blurred, cv2.HOUGH_GRADIENT,
+        dp=1.2, minDist=15,
+        param1=60, param2=30,
+        minRadius=10, maxRadius=60,
+    )
+
+    # Rysujemy wykryte okręgi na kopii obrazu
+    vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    n_circles = 0
+    if circles is not None:
+        circles_int = np.round(circles[0]).astype(int)
+        n_circles = len(circles_int)
+        for (x, y, r) in circles_int:
+            cv2.circle(vis, (x, y), r, (0, 255, 0), 2)
+            cv2.circle(vis, (x, y), 2, (0, 0, 255), 3)
+
+    ax.imshow(cv2.cvtColor(vis, cv2.COLOR_BGR2RGB))
+    ax.set_title(f"{c}\n{n_circles} okręgów", fontsize=9)
+    ax.axis("off")
+
+plt.suptitle("Wykryte okręgi HoughCircles dla każdej klasy", fontsize=13)
+plt.tight_layout()
+plt.savefig("eda/hough_circles.png", dpi=150)
+plt.close()
+
+print("Zapisano wizualizację HoughCircles!")
+
 print("Zakończono generowanie EDA.")

@@ -10,7 +10,12 @@ STEPS = [
         "output_check": "dataset_out",
     },
     {
-        "name": "Classification - Klasyfikatory (KNN, SVM, Random Forest)",
+        "name": "Edge Visualization - Wizualizacja krawędzi",
+        "file": "edge_visualization.py",
+        "output_check": "edges/canny_wszystkie_klasy.png",
+    },
+    {
+        "name": "Classification - Klasyfikatory (LR, ET, Random Forest)",
         "file": "classification.py",
         "output_check": "classification/porownanie_dokladnosci.png",
     },
@@ -87,6 +92,7 @@ def main():
     print("Wyniki zapisane w folderach:")
     print("  dataset_out/    - ujednolicone obrazy")
     print("  eda/            - wykresy eksploracji danych")
+    print("  edges/          - wizualizacja pipeline krawędzi (Canny, kontury, okręgi)")
     print("  classification/ - klasyfikatory i macierze pomylek")
     print("  hard_pairs/     - analiza trudnych par klas")
 

@@ -1,11 +1,9 @@
 import os
 import cv2
 import numpy as np
-from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 dir = "dataset_out"
-N_PCA_COMPONENTS = 50
 
 
 def load_data():
@@ -16,79 +14,165 @@ def load_data():
 
     for c in classes:
         class_path = os.path.join(dir, c)
-
         for img_name in os.listdir(class_path):
             img_path = os.path.join(class_path, img_name)
             img = cv2.imread(img_path)
-
             if img is None:
                 continue
-
             images.append(img)
             labels.append(c)
 
     return images, labels
 
 
+def augment(img):
+    """
+    Generuje 7 wersji obrazu: oryginał + obroty co 60° + odbicie poziome.
+    Moneta jest okrągła więc każdy obrót jest poprawną próbką tej samej klasy.
+    """
+    h, w = img.shape[:2]
+    cx, cy = w // 2, h // 2
+    variants = [img]
+
+    for angle in [60, 120, 180, 240, 300]:
+        M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
+        rotated = cv2.warpAffine(img, M, (w, h))
+        variants.append(rotated)
+
+    variants.append(cv2.flip(img, 1))
+    return variants
+
+
+def extract_digit_features(gray, cx, cy, inner_radius):
+    """
+    Wyciąga cechy cyfry ze środka monety używając tylko OpenCV.
+    Analizuje kontury wewnątrz najmniejszego okręgu (tam jest cyfra nominału).
+
+    Zwraca 6 cech:
+    - num_inner_contours : liczba konturów wewnątrz ROI (cyfra "8" ma więcej niż "1")
+    - digit_area_ratio   : stosunek pola konturów do pola ROI (jak "pełna" jest cyfra)
+    - digit_aspect_ratio : stosunek szerokości do wysokości bounding box cyfry
+    - num_holes          : liczba dziur w konturach (0=1/2/5/7, 1=0/4/6/9, 2=8)
+    - mean_intensity     : średnia jasność ROI (tło vs cyfra)
+    - std_intensity      : odchylenie jasności ROI (kontrast cyfry)
+    """
+    r = max(inner_radius - 10, 5)
+    x1 = max(cx - r, 0)
+    y1 = max(cy - r, 0)
+    x2 = min(cx + r, gray.shape[1])
+    y2 = min(cy + r, gray.shape[0])
+
+    roi = gray[y1:y2, x1:x2]
+    if roi.size == 0:
+        return np.zeros(6, dtype=np.float32)
+
+    # Preprocessing ROI
+    roi_blur = cv2.GaussianBlur(roi, (3, 3), 0)
+    _, roi_thresh = cv2.threshold(roi_blur, 0, 255,
+                                  cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    k3 = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    roi_morph = cv2.morphologyEx(roi_thresh, cv2.MORPH_CLOSE, k3)
+
+    # Kontury zewnętrzne (cyfra jako całość)
+    contours_ext, _ = cv2.findContours(roi_morph, cv2.RETR_EXTERNAL,
+                                        cv2.CHAIN_APPROX_SIMPLE)
+    # Kontury z dziurami (wykrywa wnętrze liter jak "0", "4", "8")
+    contours_all, hierarchy = cv2.findContours(roi_morph, cv2.RETR_CCOMP,
+                                                cv2.CHAIN_APPROX_SIMPLE)
+
+    roi_area = roi.shape[0] * roi.shape[1]
+
+    # Liczba konturów zewnętrznych
+    num_inner_contours = len(contours_ext)
+
+    # Stosunek pola cyfry do pola ROI
+    digit_area = sum(cv2.contourArea(c) for c in contours_ext)
+    digit_area_ratio = digit_area / roi_area if roi_area > 0 else 0
+
+    # Aspect ratio bounding box największego konturu
+    if contours_ext:
+        largest = max(contours_ext, key=cv2.contourArea)
+        x, y, w, h = cv2.boundingRect(largest)
+        digit_aspect_ratio = w / h if h > 0 else 0
+    else:
+        digit_aspect_ratio = 0
+
+    # Liczba dziur (kontury wewnętrzne = dziury w cyfrach jak "0", "8")
+    num_holes = 0
+    if hierarchy is not None and len(hierarchy) > 0:
+        for h in hierarchy[0]:
+            if h[3] != -1:  # ma rodzica = jest dziurą
+                num_holes += 1
+
+    # Statystyki jasności ROI
+    mean_intensity = float(np.mean(roi))
+    std_intensity  = float(np.std(roi))
+
+    return np.array([
+        num_inner_contours,
+        digit_area_ratio,
+        digit_aspect_ratio,
+        num_holes,
+        mean_intensity,
+        std_intensity,
+    ], dtype=np.float32)
+
+
 def extract_features(img):
     """
     Wyciąga cechy krawędziowe monety:
-    - obraz krawędzi Canny spłaszczony do wektora (główna informacja dla klasyfikatora)
-    - cechy geometryczne z HoughCircles i konturów jako dodatkowy kontekst
+    - obraz krawędzi Canny 128x128 spłaszczony do wektora (16384 wartości)
+    - cechy geometryczne z HoughCircles i konturów (6 wartości)
+    - cechy cyfry ze środka monety przez OpenCV (6 wartości)
+    Razem: 16396 cech
     """
-    if len(img.shape) == 3:
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    else:
-        gray = img
+    gray = img if len(img.shape) == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (7, 7), 1.5)
 
-    # =====[ Krawędzie Canny — główna cecha ]=====
+    # =====[ Krawędzie Canny ]=====
     edges = cv2.Canny(blurred, 40, 120)
-    edges_small = cv2.resize(edges, (32, 32))
-    edges_flat = (edges_small / 255.0).flatten()  # wektor 32*32 = 1024 wartości
+    edges_flat = (edges / 255.0).flatten()  # 128*128 = 16384 wartości
 
     # =====[ Okręgi — HoughCircles ]=====
     circles = cv2.HoughCircles(
-        blurred,
-        cv2.HOUGH_GRADIENT,
-        dp=1.2,
-        minDist=15,
-        param1=60,
-        param2=30,
-        minRadius=10,
-        maxRadius=60,
+        blurred, cv2.HOUGH_GRADIENT,
+        dp=1.2, minDist=15,
+        param1=60, param2=30,
+        minRadius=10, maxRadius=60,
     )
-
     if circles is not None:
-        circles = np.round(circles[0]).astype(int)
-        radii = sorted([c[2] for c in circles], reverse=True)
-        num_circles = len(radii)
-        max_radius = radii[0]
-        radius_ratio = radii[-1] / radii[0] if radii[0] > 0 else 0
+        circles_sorted = sorted(circles[0], key=lambda c: c[2])  # rosnąco po r
+        num_circles  = len(circles_sorted)
+        max_radius   = int(circles_sorted[-1][2])
+        radius_ratio = circles_sorted[0][2] / circles_sorted[-1][2] if circles_sorted[-1][2] > 0 else 0
+        # Środek i promień najmniejszego okręgu — tam jest cyfra
+        cx_inner = int(circles_sorted[0][0])
+        cy_inner = int(circles_sorted[0][1])
+        r_inner  = int(circles_sorted[0][2])
     else:
-        num_circles = 0
-        max_radius = 0
-        radius_ratio = 0
+        num_circles, max_radius, radius_ratio = 0, 0, 0
+        cx_inner = cy_inner = gray.shape[0] // 2
+        r_inner  = gray.shape[0] // 4
 
-    # =====[ Kontury ]=====
+    # =====[ Kontury zewnętrzne monety ]=====
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if contours:
-        largest = max(contours, key=cv2.contourArea)
-        area = cv2.contourArea(largest)
-        perimeter = cv2.arcLength(largest, True)
+        largest    = max(contours, key=cv2.contourArea)
+        area       = cv2.contourArea(largest)
+        perimeter  = cv2.arcLength(largest, True)
         circularity = (4 * np.pi * area / (perimeter ** 2)) if perimeter > 0 else 0
     else:
-        area = 0
-        perimeter = 0
-        circularity = 0
+        area, perimeter, circularity = 0, 0, 0
 
-    geometric = np.array([
-        num_circles, max_radius, radius_ratio,
-        area, perimeter, circularity,
-    ], dtype=np.float32)
+    geometric = np.array(
+        [num_circles, max_radius, radius_ratio, area, perimeter, circularity],
+        dtype=np.float32
+    )
 
-    # Łączymy obraz krawędzi (16384) + cechy geometryczne (6)
-    return np.concatenate([edges_flat, geometric])
+    # =====[ Cechy cyfry ze środka monety ]=====
+    digit_feats = extract_digit_features(gray, cx_inner, cy_inner, r_inner)
+
+    return np.concatenate([edges_flat, geometric, digit_feats])  # 16396 cech
 
 
 def prepare_dataset():
@@ -97,34 +181,28 @@ def prepare_dataset():
     X = []
     y = []
 
+    print(f"Wczytano {len(images)} obrazow. Trwa augmentacja...")
     for img, label in zip(images, labels):
         img = cv2.resize(img, (128, 128))
-        feats = extract_features(img)
-        X.append(feats)
-        y.append(label)
+        for variant in augment(img):
+            X.append(extract_features(variant))
+            y.append(label)
+
+    print(f"Po augmentacji: {len(X)} probek (7x wiecej niz oryginalnie)")
 
     X = np.array(X)
     y = np.array(y)
 
-    # =====[ Standaryzacja ]=====
+    # Standaryzacja — wyrównuje skale cech (Canny 0/1 vs area w tysiącach)
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X = scaler.fit_transform(X)
 
-    # =====[ PCA — redukcja wymiarowości ]=====
-    n_components = min(N_PCA_COMPONENTS, X_scaled.shape[0] - 1, X_scaled.shape[1])
-    pca = PCA(n_components=n_components)
-    X_pca = pca.fit_transform(X_scaled)
-
-    explained = np.sum(pca.explained_variance_ratio_) * 100
-    print(f"PCA: {X.shape[1]} cech → {n_components} komponentów "
-          f"({explained:.1f}% wyjasnionej wariancji)")
-
-    return X_pca, y
+    return X, y, scaler
 
 
 def main():
-    X, y = prepare_dataset()
-    print("Shape X po PCA:", X.shape)
+    X, y, _ = prepare_dataset()
+    print("Shape X:", X.shape)
     print("Shape y:", y.shape)
 
 

@@ -7,8 +7,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from preprocessing import prepare_dataset
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     classification_report,
@@ -21,7 +20,7 @@ from sklearn.metrics import (
 os.makedirs("hard_pairs", exist_ok=True)
 
 print("Wczytywanie i przetwarzanie danych...")
-X_all, y_all = prepare_dataset()
+X_all, y_all, _ = prepare_dataset()
 
 #=====[ Definicja trudnych par ]=====
 #
@@ -41,13 +40,11 @@ classifiers = {
     "Logistic Regression": LogisticRegression(
         max_iter=1000, random_state=42
     ),
-    "SVM (RBF)": SVC(
-        kernel="rbf", C=10, gamma="scale",
-        decision_function_shape="ovr", random_state=42
+    "Extra Trees": ExtraTreesClassifier(
+        n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1
     ),
     "Random Forest": RandomForestClassifier(
-        n_estimators=200, max_depth=None,
-        min_samples_leaf=2, random_state=42
+        n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1
     ),
 }
 
@@ -158,7 +155,7 @@ for cls_a, cls_b in hard_pairs:
 #=====[ Tabela zbiorcza ]=====
 
 print("\nTabela zbiorcza trudnych par:")
-header = f"{'Para':<20} {'LR acc':>9} {'SVM acc':>9} {'RF acc':>9}"
+header = f"{'Para':<20} {'LR acc':>9} {'ET acc':>9} {'RF acc':>9}"
 print(header)
 print("-" * 50)
 
@@ -168,7 +165,7 @@ with open("hard_pairs/tabela_trudnych_par.txt", "w", encoding="utf-8") as f:
     for r in all_results:
         line = (f"{r['para']:<20} "
                 f"{r['Logistic Regression']['acc']:>9.3f} "
-                f"{r['SVM (RBF)']['acc']:>9.3f} "
+                f"{r['Extra Trees']['acc']:>9.3f} "
                 f"{r['Random Forest']['acc']:>9.3f}")
         print(line)
         f.write(line + "\n")

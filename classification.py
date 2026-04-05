@@ -4,8 +4,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     classification_report,
@@ -22,7 +21,7 @@ from preprocessing import prepare_dataset
 os.makedirs("classification", exist_ok=True)
 
 print("Wczytywanie i przetwarzanie danych...")
-X, y = prepare_dataset()
+X, y, scaler = prepare_dataset()
 
 classes = sorted(np.unique(y))
 print(f"Zaladowano {len(X)} probek, {len(classes)} klas.")
@@ -39,13 +38,11 @@ classifiers = {
     "Logistic Regression": LogisticRegression(
         max_iter=1000, random_state=42
     ),
-    "SVM (RBF)": SVC(
-        kernel="rbf", C=10, gamma="scale",
-        decision_function_shape="ovr", random_state=42
+    "Extra Trees": ExtraTreesClassifier(
+        n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1
     ),
     "Random Forest": RandomForestClassifier(
-        n_estimators=200, max_depth=None,
-        min_samples_leaf=2, random_state=42
+        n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1
     ),
 }
 
@@ -65,11 +62,12 @@ for name, clf in classifiers.items():
     print(f"Dokladnosc (test): {acc:.4f} ({acc*100:.2f}%)")
     print(f"F1 macro (test):   {f1:.4f}")
 
-    print("Cross-walidacja (5-fold)...")
-    cv_acc = cross_val_score(clf, X, y, cv=5, scoring="accuracy")
-    cv_f1  = cross_val_score(clf, X, y, cv=5, scoring="f1_macro")
+    print("Cross-walidacja (3-fold)...")
+    cv_acc = cross_val_score(clf, X, y, cv=3, scoring="accuracy", n_jobs=-1)
+    cv_f1  = cross_val_score(clf, X, y, cv=3, scoring="f1_macro", n_jobs=-1)
     print(f"CV accuracy: {cv_acc.mean():.4f} +/- {cv_acc.std():.4f}")
     print(f"CV F1 macro: {cv_f1.mean():.4f} +/- {cv_f1.std():.4f}")
+
 
     report = classification_report(y_test, y_pred, target_names=classes)
     print(f"\nRaport klasyfikacji:\n{report}")
