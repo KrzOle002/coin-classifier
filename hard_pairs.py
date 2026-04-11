@@ -3,12 +3,14 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os
+import joblib
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from preprocessing import prepare_dataset
 from sklearn.model_selection import train_test_split
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.svm import SVC
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
-    classification_report,
     confusion_matrix,
     ConfusionMatrixDisplay,
     accuracy_score,
@@ -17,42 +19,47 @@ from sklearn.metrics import (
 
 os.makedirs("hard_pairs", exist_ok=True)
 
-print("Wczytywanie danych po PCA...")
-data = np.load("pca/pca_data.npz", allow_pickle=True)
-X_all = data["X"]
-y_all = data["y"]
+print("Wczytywanie i przetwarzanie danych...")
+X_train_full, X_test_full, y_train_full, y_test_full, scaler = prepare_dataset()
+
+# Łączymy train i test z powrotem żeby filtrować pary — pary mają własny podział
+X_all = np.vstack([X_train_full, X_test_full])
+y_all = np.concatenate([y_train_full, y_test_full])
+
+# Próba załadowania wytrenowanych modeli z classification.py
+# Jeśli nie istnieją — trenujemy od nowa (fallback)
+classifiers = {}
+models_dir = "models"
+
+clf_definitions = {
+    "Logistic Regression": LogisticRegression(max_iter=1000, random_state=42),
+    "Extra Trees":         ExtraTreesClassifier(n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1),
+    "Random Forest":       RandomForestClassifier(n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1),
+}
+
+for name in clf_definitions:
+    model_path = os.path.join(models_dir, f"{name.replace(' ', '_')}.joblib")
+    if os.path.exists(model_path):
+        classifiers[name] = joblib.load(model_path)
+        print(f"Zaladowano model: {name} z {model_path}")
+    else:
+        print(f"Brak zapisanego modelu '{name}' — zostanie wytrenowany na pelnym zbiorze.")
+        clf_definitions[name].fit(X_train_full, y_train_full)
+        classifiers[name] = clf_definitions[name]
 
 #=====[ Definicja trudnych par ]=====
 #
 # Pary klas które najczesciej sie mylily w classification.py.
 # Kazda para to dwie klasy ktore sa podobne wizualnie —
-# ten sam kolor lub podobny rozmiar w przestrzeni PCA.
+# ten sam kolor lub podobny rozmiar.
 
 hard_pairs = [
-    ("gr_1",  "gr_2"),    # oba male, srebrne grosze
-    ("gr_1",  "gr_20"),   # srebrne, mylone w KNN
-    ("gr_10", "gr_20"),   # male srebrne grosze
-    ("gr_50", "zl_1"),    # srebrne, podobny rozmiar
-    ("gr_1",  "zl_2"),    # gr_1 mylone z zl_2 az 4 razy w KNN
     ("ct_1",  "ct_2"),    # male miedziane eurocenty
     ("ct_10", "ct_20"),   # zolte eurocenty
-    ("zl_1",  "e_1"),  
-    ("zl_5",   "e_2"),    
+    ("ct_1",  "ct_5"),    # male miedziane eurocenty
+    ("ct_20", "ct_50"),   # zolte eurocenty
+    ("e_1",   "e_2"),     # srebrno-zolte euro
 ]
-
-classifiers = {
-    "KNN (k=7)": KNeighborsClassifier(
-        n_neighbors=7, metric="euclidean", weights="distance"
-    ),
-    "SVM (RBF)": SVC(
-        kernel="rbf", C=10, gamma="scale",
-        decision_function_shape="ovr", random_state=42
-    ),
-    "Random Forest": RandomForestClassifier(
-        n_estimators=200, max_depth=None,
-        min_samples_leaf=2, random_state=42
-    ),
-}
 
 #=====[ Wyniki dla kazdej pary ]=====
 
@@ -72,7 +79,7 @@ for cls_a, cls_b in hard_pairs:
     n_b = np.sum(y == cls_b)
     print(f"Liczba probek: {cls_a}={n_a}, {cls_b}={n_b}, lacznie={len(y)}")
 
-    # Podział 80/20
+    # Podział 80/20 dla tej pary
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
@@ -80,7 +87,8 @@ for cls_a, cls_b in hard_pairs:
     pair_results = {"para": f"{cls_a} vs {cls_b}"}
 
     for name, clf in classifiers.items():
-        clf.fit(X_train, y_train)
+        # Jeśli model wczytany z pliku — predyktujemy bezpośrednio na podzbiorze
+        # (model widział inne klasy, ale predict działa poprawnie dla podzbioru)
         y_pred = clf.predict(X_test)
         acc = accuracy_score(y_test, y_pred)
         f1  = f1_score(y_test, y_pred, average="macro")
@@ -143,7 +151,6 @@ for cls_a, cls_b in hard_pairs:
     fig.suptitle(f"Macierze pomylek: {cls_a} vs {cls_b}", fontsize=13)
 
     for ax, (name, clf) in zip(axes, classifiers.items()):
-        clf.fit(X_train, y_train)
         y_pred = clf.predict(X_test)
         acc = accuracy_score(y_test, y_pred)
 
@@ -161,7 +168,7 @@ for cls_a, cls_b in hard_pairs:
 #=====[ Tabela zbiorcza ]=====
 
 print("\nTabela zbiorcza trudnych par:")
-header = f"{'Para':<20} {'KNN acc':>9} {'SVM acc':>9} {'RF acc':>9}"
+header = f"{'Para':<20} {'LR acc':>9} {'ET acc':>9} {'RF acc':>9}"
 print(header)
 print("-" * 50)
 
@@ -170,8 +177,8 @@ with open("hard_pairs/tabela_trudnych_par.txt", "w", encoding="utf-8") as f:
     f.write("-" * 50 + "\n")
     for r in all_results:
         line = (f"{r['para']:<20} "
-                f"{r['KNN (k=7)']['acc']:>9.3f} "
-                f"{r['SVM (RBF)']['acc']:>9.3f} "
+                f"{r['Logistic Regression']['acc']:>9.3f} "
+                f"{r['Extra Trees']['acc']:>9.3f} "
                 f"{r['Random Forest']['acc']:>9.3f}")
         print(line)
         f.write(line + "\n")

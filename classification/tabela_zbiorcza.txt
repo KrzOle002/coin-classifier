@@ -1,0 +1,5 @@
+Klasyfikator           Accuracy   F1 macro  CV Accuracy      CV F1
+-----------------------------------------------------------------
+Logistic Regression      0.9708     0.9709       0.9659     0.9659
+Extra Trees              1.0000     1.0000       0.9927     0.9927
+Random Forest            0.9958     0.9958       0.9900     0.9900

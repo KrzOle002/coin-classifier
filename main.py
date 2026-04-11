@@ -10,14 +10,19 @@ STEPS = [
         "output_check": "dataset_out",
     },
     {
-        "name": "PCA - Redukcja wymiarowosci",
-        "file": "pca.py",
-        "output_check": "pca/pca_data.npz",
+        "name": "Edge Visualization - Wizualizacja krawędzi i HOG",
+        "file": "edge_visualization.py",
+        "output_check": "edges/canny_hog_wszystkie_klasy.png",
     },
     {
-        "name": "Classification - Klasyfikatory (KNN, SVM, Random Forest)",
+        "name": "Classification - Klasyfikatory (LR, ET, Random Forest)",
         "file": "classification.py",
         "output_check": "classification/porownanie_dokladnosci.png",
+    },
+    {
+        "name": "Hard Pairs - Analiza trudnych par klas",
+        "file": "hard_pairs.py",
+        "output_check": "hard_pairs/porownanie_par.png",
     },
 ]
 
@@ -87,9 +92,10 @@ def main():
     print("Wyniki zapisane w folderach:")
     print("  dataset_out/    - ujednolicone obrazy")
     print("  eda/            - wykresy eksploracji danych")
-    print("  pca/            - redukcja wymiarowosci i eigencoins")
-    print("  clustering/     - klasteryzacja K-Means i DBSCAN")
+    print("  edges/          - wizualizacja pipeline krawędzi (Canny, kontury, HOG)")
     print("  classification/ - klasyfikatory i macierze pomylek")
+    print("  models/         - zapisane modele (.joblib) + scaler")
+    print("  hard_pairs/     - analiza trudnych par klas")
 
 
 if __name__ == "__main__":
