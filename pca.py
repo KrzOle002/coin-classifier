@@ -17,7 +17,7 @@ classes = sorted(os.listdir(dir_out))
 
 print("Wczytywanie obrazów...")
 
-# =====[ Wczytywanie i spłaszczanie obrazów ]=====
+#Wczytywanie i spłaszczanie obrazów
 
 # Każdy obraz 128x128 RGB spłaszczamy do wektora 128*128*3 = 49152 wartości.
 # PCA potrzebuje macierzy (n_samples, n_features).
@@ -45,20 +45,18 @@ print(f"Rozmiar macierzy wejściowej: {X.shape}")  # (n_samples, 49152)
 
 
 
-# =====[ Standaryzacja ]=====
+#Standaryzacja
 
-# Przed PCA standaryzujemy dane (mean=0, std=1), żeby żaden kanał
-# koloru nie dominował tylko przez skalę wartości.
+# Przed PCA standaryzujemy dane (mean=0, std=1), żeby żaden kanał koloru nie dominował tylko przez skalę wartości.
 print("\nStandaryzacja danych...")
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
 
 
-# =====[ PCA - wyjaśniona wariancja ]=====
+#PCA - wyjaśniona wariancja
 
-# Najpierw uruchamiamy PCA z większą liczbą komponentów,
-# żeby sprawdzić ile komponentów wystarczy do zachowania np. 95% wariancji.
+# Najpierw uruchamiamy PCA z większą liczbą komponentów, żeby sprawdzić ile komponentów wystarczy do zachowania np. 95% wariancji.
 print("\nObliczanie PCA (analiza wariancji)...")
 
 n_components_analysis = min(100, len(X) - 1, X_scaled.shape[1])
@@ -108,11 +106,9 @@ plt.close()
 print("Zapisano wykres wariancji skumulowanej!")
 
 
+#PCA do 50 komponentów (redukcja docelowa)
 
-# =====[ PCA do 50 komponentów (redukcja docelowa) ]=====
-
-# Używamy 50 komponentów jako rozsądny kompromis między zachowaniem
-# informacji a redukcją wymiarowości (z 49152 do 50).
+# Używamy 50 komponentów jako rozsądny kompromis między zachowaniem informacji a redukcją wymiarowości (z 49152 do 50).
 N_COMPONENTS = 50
 print(f"\nRedukcja do {N_COMPONENTS} komponentów PCA...")
 
@@ -124,7 +120,7 @@ print(f"Wyjaśniona wariancja ({N_COMPONENTS} komponentów): {cumulative_varianc
 
 
 
-# =====[ Wizualizacja 2D (PC1 vs PC2) ]=====
+#Wizualizacja 2D (PC1 vs PC2)
 
 # Pierwsze dwa komponenty główne zawierają najwięcej informacji.
 # Wizualizujemy próbki na płaszczyźnie PC1 x PC2.
@@ -160,7 +156,7 @@ print("Zapisano wizualizację 2D!")
 
 
 
-# =====[ Wizualizacja 3D (PC1, PC2, PC3) ]=====
+#Wizualizacja 3D (PC1, PC2, PC3)
 
 # Dodanie trzeciego komponentu często ujawnia dodatkową strukturę danych.
 print("Tworzenie wizualizacji 3D...")
@@ -193,11 +189,9 @@ print("Zapisano wizualizację 3D!")
 
 
 
-# =====[ Eigenfaces - wizualizacja komponentów głównych ]=====
+#Eigenfaces - wizualizacja komponentów głównych
 
-# Pierwsze komponenty PCA (tzw. "eigenfaces" / "eigencoins") pokazują
-# kierunki największej zmienności w danych — czyli cechy, które PCA uznało
-# za najbardziej informacyjne.
+# Pierwsze komponenty PCA (tzw. "eigenfaces" / "eigencoins") pokazują kierunki największej zmienności w danych — czyli cechy, które PCA uznało za najbardziej informacyjne.
 print("Tworzenie wizualizacji komponentów głównych (eigencoins)...")
 
 n_show = min(16, N_COMPONENTS)
@@ -227,10 +221,9 @@ print("Zapisano eigencoins!")
 
 
 
-# =====[ Zapis przetworzonego datasetu ]=====
+#Zapis przetworzonego datasetu
 
-# Zapisujemy X_pca i y do pliku .npz — będą używane przez klasyfikatory
-# w kolejnym kroku (classification.py), żeby nie przeliczać PCA od nowa.
+# Zapisujemy X_pca i y do pliku .npz — będą używane przez klasyfikatory w kolejnym kroku (classification.py), żeby nie przeliczać PCA od nowa.
 print("\nZapisywanie danych po PCA...")
 np.savez("pca/pca_data.npz", X=X_pca, y=y)
 np.save("pca/pca_components.npy", pca.components_)
