@@ -1,8 +1,13 @@
 Klasyfikator: Random Forest
 Dokladnosc (test): 0.9958
 F1 macro (test):   0.9958
+<<<<<<< HEAD
 CV accuracy: 0.9900 +/- 0.0032
 CV F1 macro: 0.9900 +/- 0.0032
+=======
+CV accuracy: 0.9897 +/- 0.0010
+CV F1 macro: 0.9898 +/- 0.0010
+>>>>>>> Julia
 
               precision    recall  f1-score   support
 

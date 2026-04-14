@@ -57,6 +57,8 @@ def extract_digit_features(gray, cx, cy, inner_radius):
     - mean_intensity     : średnia jasność ROI (tło vs cyfra)
     - std_intensity      : odchylenie jasności ROI (kontrast cyfry)
     """
+    gray = gray.astype(np.uint8)
+
     r = max(inner_radius - 10, 5)
     x1 = max(cx - r, 0)
     y1 = max(cy - r, 0)
@@ -130,6 +132,7 @@ def extract_features(img):
     Razem: ~1776 cech (zamiast wcześniejszych 16396)
     """
     gray = img if len(img.shape) == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+<<<<<<< HEAD
     blurred = cv2.GaussianBlur(gray, (7, 7), 1.5)
 
     # =====[ HOG — Histogram of Oriented Gradients ]=====
@@ -138,6 +141,23 @@ def extract_features(img):
     # po normalizacji blokowej (2x2): 7x7=49 bloków → 49*4*9 = 1764 cech
     hog_feats = hog(
         gray,
+=======
+    #Kopia do OpenCV (uint8)
+    gray_uint8 = gray.copy()
+
+    #Normalizacja tylko do HOG (float)
+    gray_float = gray.astype(np.float32) / 255.0
+
+    #Blur robimy na uint8 (dla HoughCircles)
+    blurred = cv2.GaussianBlur(gray_uint8, (7, 7), 1.5)
+
+    #HOG - Histogram of Oriented Gradients
+    #pixels_per_cell=(16,16), cells_per_block=(2,2), 9 orientacji
+    #dla obrazu 128x128: (128/16)=8 komórek na oś → 8x8=64 komórki
+    #po normalizacji blokowej (2x2): 7x7=49 bloków → 49*4*9 = 1764 cech
+    hog_feats = hog(
+        gray_float,
+>>>>>>> Julia
         orientations=9,
         pixels_per_cell=(16, 16),
         cells_per_block=(2, 2),
@@ -145,7 +165,11 @@ def extract_features(img):
         feature_vector=True,
     )
 
+<<<<<<< HEAD
     # =====[ Okręgi — HoughCircles ]=====
+=======
+    #Okręgi - HoughCircles
+>>>>>>> Julia
     circles = cv2.HoughCircles(
         blurred, cv2.HOUGH_GRADIENT,
         dp=1.2, minDist=15,
@@ -157,7 +181,11 @@ def extract_features(img):
         num_circles  = len(circles_sorted)
         max_radius   = int(circles_sorted[-1][2])
         radius_ratio = circles_sorted[0][2] / circles_sorted[-1][2] if circles_sorted[-1][2] > 0 else 0
+<<<<<<< HEAD
         # Środek i promień najmniejszego okręgu — tam jest cyfra
+=======
+        #Środek i promień najmniejszego okręgu - tam jest cyfra
+>>>>>>> Julia
         cx_inner = int(circles_sorted[0][0])
         cy_inner = int(circles_sorted[0][1])
         r_inner  = int(circles_sorted[0][2])
@@ -166,7 +194,11 @@ def extract_features(img):
         cx_inner = cy_inner = gray.shape[0] // 2
         r_inner  = gray.shape[0] // 4
 
+<<<<<<< HEAD
     # =====[ Kontury zewnętrzne monety (z krawędzi Canny) ]=====
+=======
+    #Kontury zewnętrzne monety (z krawędzi Canny)
+>>>>>>> Julia
     edges = cv2.Canny(blurred, 40, 120)
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if contours:
@@ -182,7 +214,11 @@ def extract_features(img):
         dtype=np.float32
     )
 
+<<<<<<< HEAD
     # =====[ Cechy cyfry ze środka monety ]=====
+=======
+    #Cechy cyfry ze środka monety
+>>>>>>> Julia
     digit_feats = extract_digit_features(gray, cx_inner, cy_inner, r_inner)
 
     return np.concatenate([hog_feats, geometric, digit_feats])
@@ -202,13 +238,21 @@ def prepare_dataset(augment_train_only=True):
 
     print(f"Wczytano {len(images)} obrazow oryginalnych.")
 
+<<<<<<< HEAD
     # Podział PRZED augmentacją — zapobiega data leakage
+=======
+    #Podział przed augmentacją - zapobiega data leakage
+>>>>>>> Julia
     idx = np.arange(len(images))
     idx_train, idx_test = train_test_split(idx, test_size=0.2, random_state=42, stratify=labels)
 
     print(f"Podzial: {len(idx_train)} train / {len(idx_test)} test (przed augmentacja)")
 
+<<<<<<< HEAD
     # ===[ Zbiór treningowy — z augmentacją ]===
+=======
+    #Zbiór treningowy - z augmentacją
+>>>>>>> Julia
     X_train_list, y_train_list = [], []
     for i in idx_train:
         img = cv2.resize(images[i], (128, 128))
@@ -216,7 +260,11 @@ def prepare_dataset(augment_train_only=True):
             X_train_list.append(extract_features(variant))
             y_train_list.append(labels[i])
 
+<<<<<<< HEAD
     # ===[ Zbiór testowy — BEZ augmentacji, tylko oryginały ]===
+=======
+    #Zbiór testowy - BEZ augmentacji, tylko oryginały
+>>>>>>> Julia
     X_test_list, y_test_list = [], []
     for i in idx_test:
         img = cv2.resize(images[i], (128, 128))
@@ -231,7 +279,11 @@ def prepare_dataset(augment_train_only=True):
     print(f"Po augmentacji: {len(X_train)} probek treningowych (7x), {len(X_test)} testowych")
     print(f"Wymiar cech: {X_train.shape[1]}")
 
+<<<<<<< HEAD
     # Scaler fitowany TYLKO na danych treningowych
+=======
+    #Scaler fitowany TYLKO na danych treningowych
+>>>>>>> Julia
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
     X_test  = scaler.transform(X_test)

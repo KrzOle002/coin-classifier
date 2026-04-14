@@ -1,8 +1,13 @@
 Klasyfikator: Extra Trees
 Dokladnosc (test): 1.0000
 F1 macro (test):   1.0000
+<<<<<<< HEAD
 CV accuracy: 0.9927 +/- 0.0032
 CV F1 macro: 0.9927 +/- 0.0032
+=======
+CV accuracy: 0.9932 +/- 0.0008
+CV F1 macro: 0.9932 +/- 0.0008
+>>>>>>> Julia
 
               precision    recall  f1-score   support
 
