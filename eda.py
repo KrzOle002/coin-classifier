@@ -84,8 +84,6 @@ plt.close()
 
 print("Zapisano wykres liczności klas!")
 
-
-
 #=====[ Histogramy — grayscale ]=====
 
 print("Tworzenie histogramów pikseli...")
@@ -114,43 +112,6 @@ for c in classes:
 
 print("Histogramy zapisane!")
 
-#Histogramy RGB
-
-print("Tworzenie histogramów RGB...")
-
-for c in classes:
-    class_path = os.path.join(dir_out, c)
-
-    r_vals, g_vals, b_vals = [], [], []
-
-    for img_name in os.listdir(class_path):
-        img_path = os.path.join(class_path, img_name)
-        img = cv2.imread(img_path)
-        if img is None:
-            continue
-
-        b, g, r = cv2.split(img)
-        r_vals.extend(r.flatten())
-        g_vals.extend(g.flatten())
-        b_vals.extend(b.flatten())
-
-    plt.figure()
-    plt.hist(r_vals, bins=256, color='r', alpha=0.5, label='R')
-    plt.hist(g_vals, bins=256, color='g', alpha=0.5, label='G')
-    plt.hist(b_vals, bins=256, color='b', alpha=0.5, label='B')
-    plt.legend()
-
-    plt.title(f"Histogram RGB - {c}")
-    plt.xlabel("Intensywnosc")
-    plt.ylabel("Liczba pikseli")
-
-    plt.savefig(f"eda/hist_rgb_{c}.png")
-    plt.close()
-
-print("Histogramy RGB zapisane!")
-
-
-
 #=====[ Średni obraz dla klasy ]=====
 
 print("Tworzenie średnich obrazów...")
@@ -171,14 +132,6 @@ for c in classes:
     #Mając pełną listę generujemy "średnią grafikę". Jest to średnia wartość pikseli wszystkich obrazów.
     mean_img = np.mean(imgs, axis=0).astype("uint8")
     mean_gray = cv2.cvtColor(mean_img, cv2.COLOR_BGR2GRAY)
-
-    #Mean RGB (opcjonalnie)
-    plt.figure()
-    plt.imshow(cv2.cvtColor(mean_img, cv2.COLOR_BGR2RGB))
-    plt.axis("off")
-    plt.title(f"Mean RGB - {c}")
-    plt.savefig(f"eda/mean_rgb_{c}.png")
-    plt.close()
 
     plt.figure()
 
