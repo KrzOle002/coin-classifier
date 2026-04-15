@@ -54,8 +54,12 @@ for name in clf_definitions:
 # ten sam kolor lub podobny rozmiar.
 
 hard_pairs = [
-    ("ct_1",  "ct_2"),    # male miedziane eurocenty
-    ("ct_10", "ct_20"),   # zolte eurocenty
+    ("ct_1",  "ct_2"),
+    ("ct_1",  "ct_10"),
+    ("ct_2",  "ct_20"), 
+    ("ct_1", "e_1"), 
+    ("ct_2",  "e_2"), 
+    ("ct_10", "ct_20"),  
     ("ct_1",  "ct_5"),    # male miedziane eurocenty
     ("ct_20", "ct_50"),   # zolte eurocenty
     ("e_1",   "e_2"),     # srebrno-zolte euro
