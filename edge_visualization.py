@@ -1,102 +1,106 @@
 import os
+import sys
 import cv2
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from skimage.feature import hog
+import shutil
 
-# Folder z ujednoliconymi obrazami
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from preprocessing import extract_contour_features, EURO_CLASSES, FEATURE_NAMES, ZONE_BOUNDS
+
 dir_out = "dataset_out"
 os.makedirs("edges", exist_ok=True)
 
-classes = sorted(os.listdir(dir_out))
+classes = sorted(c for c in os.listdir(dir_out) if c in EURO_CLASSES)
 
-print("Generowanie wizualizacji krawędzi...")
+print("Generowanie wizualizacji pipeline cech konturowych (tylko Euro)...")
+
+# Kolory dla 6 stref
+ZONE_COLORS_BGR = [
+    (255,  50,  50),   # z1 centrum — ciemnoniebieski
+    (255, 130,   0),   # z2
+    (  0, 200,  80),   # z3
+    (  0, 180, 200),   # z4
+    (  0,  80, 255),   # z5
+    (180,   0, 255),   # z6 obrzeże — fioletowy
+]
+ZONE_COLORS_RGB = [(r, g, b) for (b, g, r) in ZONE_COLORS_BGR]
 
 for c in classes:
     class_path = os.path.join(dir_out, c)
-    img_names = os.listdir(class_path)
+    img_names  = os.listdir(class_path)
     if not img_names:
         continue
 
-    # Bierzemy pierwsze dostępne zdjęcie z klasy
-    img_path = os.path.join(class_path, img_names[0])
-    img = cv2.imread(img_path)
+    img = cv2.imread(os.path.join(class_path, img_names[0]))
     if img is None:
         continue
-
     img = cv2.resize(img, (128, 128))
 
-    # =====[ Krok 1: Obraz wejściowy (grayscale) ]=====
-    gray = img if len(img.shape) == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    gray    = img if len(img.shape) == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    gray_u8 = gray if gray.dtype == np.uint8 else (gray * 255).astype(np.uint8)
+    blurred = cv2.GaussianBlur(gray_u8, (7, 7), 1.5)
+    edges   = cv2.Canny(blurred, 40, 120)
 
-    # =====[ Krok 2: Rozmycie Gaussian ]=====
-    blurred = cv2.GaussianBlur(gray, (7, 7), 1.5)
+    h, w   = gray.shape
+    cx, cy = w / 2.0, h / 2.0
+    half_w = w / 2.0
+    Y, X   = np.mgrid[0:h, 0:w]
+    dist_norm = np.sqrt((X - cx)**2 + (Y - cy)**2) / half_w
 
-    # =====[ Krok 3: Krawędzie Canny ]=====
-    edges = cv2.Canny(blurred, 40, 120)
-
-    # =====[ Krok 4: Kontury na obrazie ]=====
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contour_vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-    cv2.drawContours(contour_vis, contours, -1, (0, 255, 0), 1)
-    if contours:
-        largest = max(contours, key=cv2.contourArea)
-        cv2.drawContours(contour_vis, [largest], -1, (0, 0, 255), 2)
-
-    # =====[ Krok 5: Okręgi HoughCircles ]=====
+    # --- Panel 3: HoughCircles ---
     circles = cv2.HoughCircles(
-        blurred, cv2.HOUGH_GRADIENT,
-        dp=1.2, minDist=15,
-        param1=60, param2=30,
-        minRadius=10, maxRadius=60,
+        blurred, cv2.HOUGH_GRADIENT, dp=1.2, minDist=15,
+        param1=60, param2=30, minRadius=10, maxRadius=60,
     )
-    circle_vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-    n_circles = 0
+    hough_vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    n_c = 0
     if circles is not None:
-        circles_int = np.round(circles[0]).astype(int)
-        n_circles = len(circles_int)
-        for (x, y, r) in circles_int:
-            cv2.circle(circle_vis, (x, y), r, (0, 255, 0), 2)
-            cv2.circle(circle_vis, (x, y), 2, (0, 0, 255), 3)
+        n_c = len(circles[0])
+        for (x, y, r) in np.round(circles[0]).astype(int):
+            cv2.circle(hough_vis, (x, y), r, (0, 255, 0), 2)
+            cv2.circle(hough_vis, (x, y), 2,  (0, 0, 255), 3)
 
-    # =====[ Krok 6: HOG — wizualizacja gradientów ]=====
-    # hog() z visualize=True zwraca obraz HOG pokazujący kierunki gradientów
-    # To jest dokładnie ten sam HOG co używamy w extract_features() w preprocessing.py
-    _, hog_image = hog(
-        gray,
-        orientations=9,
-        pixels_per_cell=(16, 16),
-        cells_per_block=(2, 2),
-        block_norm="L2-Hys",
-        visualize=True,
-        feature_vector=True,
-    )
-    # Skalujemy do [0,255] żeby dobrze wyglądało na wykresie
-    hog_vis = (hog_image / hog_image.max() * 255).astype(np.uint8) if hog_image.max() > 0 else hog_image.astype(np.uint8)
+    # --- Panel 4: 6 stref radialnych (kolorowe piksele krawędzi) ---
+    zone_vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    for zi, (r_lo, r_hi) in enumerate(ZONE_BOUNDS):
+        mask = (dist_norm >= r_lo) & (dist_norm < r_hi) & (edges > 0)
+        zone_vis[mask] = ZONE_COLORS_BGR[zi]
+    for zi, (r_lo, r_hi) in enumerate(ZONE_BOUNDS):
+        cv2.circle(zone_vis, (int(cx), int(cy)), int(r_hi * half_w), ZONE_COLORS_BGR[zi], 1)
 
-    # =====[ Wykres — 6 kroków obok siebie ]=====
-    fig, axes = plt.subplots(1, 6, figsize=(22, 4))
-    fig.suptitle(f"Pipeline wykrywania krawędzi — klasa: {c}", fontsize=13)
+    # --- Panel 5: Hierarchia RETR_TREE ---
+    tree_c, hier = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    tree_vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    n_holes = 0
+    if hier is not None:
+        for cnt, h_row in zip(tree_c, hier[0]):
+            if h_row[3] != -1:
+                cv2.drawContours(tree_vis, [cnt], -1, (0, 80, 255), 1)
+                n_holes += 1
+            else:
+                cv2.drawContours(tree_vis, [cnt], -1, (0, 200, 80), 1)
+
+    # --- Wykres ---
+    fig, axes = plt.subplots(1, 5, figsize=(25, 4))
+    fig.suptitle(f"Pipeline cech konturowych — klasa: {c}", fontsize=13)
 
     axes[0].imshow(gray, cmap="gray")
-    axes[0].set_title("1. Obraz wejściowy\n(grayscale)")
+    axes[0].set_title("1. Obraz wejściowy")
 
-    axes[1].imshow(blurred, cmap="gray")
-    axes[1].set_title("2. Gaussian Blur\n(redukcja szumu)")
+    axes[1].imshow(edges, cmap="gray")
+    axes[1].set_title("2. Canny edges")
 
-    axes[2].imshow(edges, cmap="gray")
-    axes[2].set_title("3. Canny\n(krawędzie)")
+    axes[2].imshow(cv2.cvtColor(hough_vis, cv2.COLOR_BGR2RGB))
+    axes[2].set_title(f"3. HoughCircles\n({n_c} okrągów)")
 
-    axes[3].imshow(cv2.cvtColor(contour_vis, cv2.COLOR_BGR2RGB))
-    axes[3].set_title(f"4. Kontury\n(zielony=wszystkie, czerwony=największy)")
+    axes[3].imshow(cv2.cvtColor(zone_vis, cv2.COLOR_BGR2RGB))
+    axes[3].set_title("4. 6 stref radialnych\n(piksele Canny kolorowane wg strefy)")
 
-    axes[4].imshow(cv2.cvtColor(circle_vis, cv2.COLOR_BGR2RGB))
-    axes[4].set_title(f"5. HoughCircles\n({n_circles} okręgów)")
-
-    axes[5].imshow(hog_vis, cmap="hot")
-    axes[5].set_title("6. HOG\n(gradienty — używane do klasyfikacji)")
+    axes[4].imshow(cv2.cvtColor(tree_vis, cv2.COLOR_BGR2RGB))
+    axes[4].set_title(f"5. RETR_TREE\nzielony=zewn., czerwony=dziury ({n_holes})")
 
     for ax in axes:
         ax.axis("off")
@@ -104,95 +108,126 @@ for c in classes:
     plt.tight_layout()
     plt.savefig(f"edges/pipeline_{c}.png", dpi=150)
     plt.close()
-    print(f"Zapisano: edges/pipeline_{c}.png")
+    print(f"  Zapisano: edges/pipeline_{c}.png")
 
-# =====[ Zbiorczy wykres wszystkich klas — Canny i HOG obok siebie ]=====
-print("\nGenerowanie zbiorczego wykresu Canny + HOG...")
 
-fig, axes = plt.subplots(4, 4, figsize=(16, 16))
-fig.suptitle("Krawędzie Canny i HOG dla wszystkich klas", fontsize=14)
-
-# 2 kolumny na klasę: [Canny, HOG] × 8 klas → 4 wiersze × 4 kolumny
-for idx, c in enumerate(classes):
-    class_path = os.path.join(dir_out, c)
-    img_names = os.listdir(class_path)
-
-    row = idx // 2
-    col_canny = (idx % 2) * 2
-    col_hog   = col_canny + 1
-
-    if not img_names:
-        axes[row][col_canny].axis("off")
-        axes[row][col_hog].axis("off")
-        continue
-
-    img = cv2.imread(os.path.join(class_path, img_names[0]))
-    if img is None:
-        axes[row][col_canny].axis("off")
-        axes[row][col_hog].axis("off")
-        continue
-
-    img = cv2.resize(img, (128, 128))
-    gray = img if len(img.shape) == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (7, 7), 1.5)
-    edges = cv2.Canny(blurred, 40, 120)
-
-    _, hog_image = hog(
-        gray,
-        orientations=9,
-        pixels_per_cell=(16, 16),
-        cells_per_block=(2, 2),
-        block_norm="L2-Hys",
-        visualize=True,
-        feature_vector=True,
-    )
-    hog_vis = (hog_image / hog_image.max() * 255).astype(np.uint8) if hog_image.max() > 0 else hog_image.astype(np.uint8)
-
-    axes[row][col_canny].imshow(edges, cmap="gray")
-    axes[row][col_canny].set_title(f"{c} — Canny", fontsize=9)
-    axes[row][col_canny].axis("off")
-
-    axes[row][col_hog].imshow(hog_vis, cmap="hot")
-    axes[row][col_hog].set_title(f"{c} — HOG", fontsize=9)
-    axes[row][col_hog].axis("off")
-
-plt.tight_layout()
-plt.savefig("edges/canny_hog_wszystkie_klasy.png", dpi=150)
-plt.close()
-print("Zapisano: edges/canny_hog_wszystkie_klasy.png")
-
-# Pozostawiamy też oryginalny plik tylko z Canny (sprawdzany przez main.py)
+# =====[ Zbiorczy: HoughCircles ]=====
+print("\nZbiorczy: HoughCircles...")
 fig, axes = plt.subplots(2, 4, figsize=(16, 8))
-fig.suptitle("Krawędzie Canny dla wszystkich klas", fontsize=14)
+fig.suptitle("HoughCircles — monety Euro\n"
+             "e_1/e_2 mają 2 okręgi (bimetalik), centy — 1", fontsize=13)
 
 for ax, c in zip(axes.flatten(), classes):
     class_path = os.path.join(dir_out, c)
-    img_names = os.listdir(class_path)
+    img_names  = os.listdir(class_path)
     if not img_names:
-        ax.axis("off")
-        continue
-
+        ax.axis("off"); continue
     img = cv2.imread(os.path.join(class_path, img_names[0]))
     if img is None:
-        ax.axis("off")
-        continue
-
-    img = cv2.resize(img, (128, 128))
-    gray = img if len(img.shape) == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        ax.axis("off"); continue
+    img     = cv2.resize(img, (128, 128))
+    gray    = img if len(img.shape) == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (7, 7), 1.5)
-    edges = cv2.Canny(blurred, 40, 120)
-
-    ax.imshow(edges, cmap="gray")
-    ax.set_title(c, fontsize=10)
+    circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, dp=1.2, minDist=15,
+                                param1=60, param2=30, minRadius=10, maxRadius=60)
+    vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    n_c = 0
+    if circles is not None:
+        n_c = len(circles[0])
+        for (x, y, r) in np.round(circles[0]).astype(int):
+            cv2.circle(vis, (x, y), r, (0, 255, 0), 2)
+            cv2.circle(vis, (x, y), 2,  (0, 0, 255), 3)
+    ax.imshow(cv2.cvtColor(vis, cv2.COLOR_BGR2RGB))
+    ax.set_title(f"{c}  ({n_c} okrągów)", fontsize=9)
     ax.axis("off")
 
 plt.tight_layout()
-plt.savefig("edges/canny_wszystkie_klasy.png", dpi=150)
+plt.savefig("edges/hough_circles_wszystkie_klasy.png", dpi=150)
+shutil.copy("edges/hough_circles_wszystkie_klasy.png", "edges/canny_hog_wszystkie_klasy.png")
 plt.close()
-print("Zapisano: edges/canny_wszystkie_klasy.png")
+print("  Zapisano: edges/hough_circles_wszystkie_klasy.png")
 
-print("\nZakończono generowanie wizualizacji krawędzi.")
-print("Wyniki w folderze: edges/")
-print("  pipeline_[klasa].png       — 6-krokowy pipeline z HOG")
-print("  canny_hog_wszystkie_klasy.png — Canny i HOG obok siebie dla każdej klasy")
-print("  canny_wszystkie_klasy.png  — samo Canny (wszystkie klasy)")
+
+# =====[ Zbiorczy: 6 stref radialnych ]=====
+print("Zbiorczy: strefy radialne...")
+fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+fig.suptitle("Profil krawędziowy — 6 stref radialnych\n"
+             "Piksele Canny kolorowane wg strefy (centrum → obrzeże)", fontsize=13)
+
+for ax, c in zip(axes.flatten(), classes):
+    class_path = os.path.join(dir_out, c)
+    img_names  = os.listdir(class_path)
+    if not img_names:
+        ax.axis("off"); continue
+    img = cv2.imread(os.path.join(class_path, img_names[0]))
+    if img is None:
+        ax.axis("off"); continue
+    img     = cv2.resize(img, (128, 128))
+    gray    = img if len(img.shape) == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    gray_u8 = gray if gray.dtype == np.uint8 else (gray * 255).astype(np.uint8)
+    blurred = cv2.GaussianBlur(gray_u8, (7, 7), 1.5)
+    edges   = cv2.Canny(blurred, 40, 120)
+    h2, w2  = gray.shape
+    cx2, cy2 = w2 / 2.0, h2 / 2.0
+    hw2 = w2 / 2.0
+    Y2, X2 = np.mgrid[0:h2, 0:w2]
+    dn = np.sqrt((X2 - cx2)**2 + (Y2 - cy2)**2) / hw2
+
+    vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    for zi, (r_lo, r_hi) in enumerate(ZONE_BOUNDS):
+        mask = (dn >= r_lo) & (dn < r_hi) & (edges > 0)
+        vis[mask] = ZONE_COLORS_BGR[zi]
+    for zi, (r_lo, r_hi) in enumerate(ZONE_BOUNDS):
+        cv2.circle(vis, (int(cx2), int(cy2)), int(r_hi * hw2), ZONE_COLORS_BGR[zi], 1)
+
+    feats = extract_contour_features(img)
+    edge_vals = feats[2:8]
+    ax.imshow(cv2.cvtColor(vis, cv2.COLOR_BGR2RGB))
+    ax.set_title(f"{c}\nz1={edge_vals[0]:.2f} z6={edge_vals[5]:.2f}", fontsize=9)
+    ax.axis("off")
+
+plt.tight_layout()
+plt.savefig("edges/strefy_radialne_wszystkie_klasy.png", dpi=150)
+shutil.copy("edges/strefy_radialne_wszystkie_klasy.png", "edges/canny_wszystkie_klasy.png")
+plt.close()
+print("  Zapisano: edges/strefy_radialne_wszystkie_klasy.png")
+
+
+# =====[ Srednie wartości 12 cech per klasa ]=====
+print("Srednie cechy per klasa...")
+class_feats_mean = {}
+for c in classes:
+    class_path = os.path.join(dir_out, c)
+    flist = []
+    for img_name in os.listdir(class_path):
+        img = cv2.imread(os.path.join(class_path, img_name))
+        if img is None:
+            continue
+        img = cv2.resize(img, (128, 128))
+        flist.append(extract_contour_features(img))
+    if flist:
+        class_feats_mean[c] = np.mean(flist, axis=0)
+
+colors_cls = plt.cm.tab10(np.linspace(0, 1, len(classes)))
+color_map  = {c: col for c, col in zip(classes, colors_cls)}
+
+fig, axes = plt.subplots(3, 4, figsize=(16, 10))
+fig.suptitle("Srednie wartości 12 cech konturowych — porównanie klas Euro", fontsize=13)
+group_bg = ["#d0e8ff"] * 2 + ["#d0ffd0"] * 6 + ["#ffd0d0"] * 2 + ["#fff0d0"] * 2
+
+for fi, feat_name in enumerate(FEATURE_NAMES):
+    ax = axes[fi // 4][fi % 4]
+    vals = [class_feats_mean[c][fi] for c in class_feats_mean]
+    ax.bar(list(class_feats_mean.keys()), vals,
+           color=[color_map[c] for c in class_feats_mean], alpha=0.85)
+    ax.set_facecolor(group_bg[fi])
+    ax.set_title(feat_name, fontsize=9)
+    ax.set_xticklabels(list(class_feats_mean.keys()), rotation=45, fontsize=7, ha="right")
+    ax.grid(axis="y", alpha=0.3)
+
+plt.tight_layout()
+plt.savefig("edges/srednie_cechy_konturowe.png", dpi=150)
+plt.close()
+print("  Zapisano: edges/srednie_cechy_konturowe.png")
+
+print("\nZakończono generowanie wizualizacji.")

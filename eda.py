@@ -279,4 +279,204 @@ plt.close()
 
 print("Zapisano wizualizację HoughCircles!")
 
-print("Zakończono generowanie EDA.")
+
+# =====[ EDA 12 cech konturowych — tylko klasy Euro ]=====
+print("\nEDA 12 cech konturowych (HoughCircles + profil radialny + hierarchia, tylko Euro)...")
+
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from preprocessing import extract_contour_features, EURO_CLASSES, FEATURE_NAMES, N_FEATURES
+
+euro_classes = sorted(c for c in classes if c in EURO_CLASSES)
+
+# Zbieramy cechy ze wszystkich obrazów per klasa
+class_features = {}
+for c in euro_classes:
+    class_path = os.path.join(dir_out, c)
+    feats_list = []
+    for img_name in sorted(os.listdir(class_path)):
+        img = cv2.imread(os.path.join(class_path, img_name))
+        if img is None:
+            continue
+        img = cv2.resize(img, (128, 128))
+        feats_list.append(extract_contour_features(img))
+    if feats_list:
+        class_features[c] = np.array(feats_list, dtype=np.float32)
+
+n_classes = len(class_features)
+palette   = plt.cm.tab10(np.linspace(0, 1, n_classes))
+color_map = {c: col for c, col in zip(class_features.keys(), palette)}
+
+# -----[ 1. Boxploty 12 cech per klasa ]-------------------------------
+print("  1/6 Boxploty 12 cech per klasa...")
+
+fig, axes = plt.subplots(3, 4, figsize=(18, 12))
+fig.suptitle(
+    "Rozkład 12 cech konturowych per klasa Euro (boxploty)\n"
+    "Grupa 1 [0–1]: HoughCircles | Grupa 2 [2–7]: Profil radialny (6 stref) | Grupa 3 [8–9]: Hierarchia | Grupa 4 [10–11]: Kątowe",
+    fontsize=12
+)
+group_colors = ["#d0e8ff"] * 2 + ["#d0ffd0"] * 6 + ["#ffd0d0"] * 2 + ["#fff0d0"] * 2
+
+for fi, feat_name in enumerate(FEATURE_NAMES):
+    ax = axes[fi // 4][fi % 4]
+    data = [class_features[c][:, fi] for c in class_features]
+    bp = ax.boxplot(data, patch_artist=True, medianprops={"color": "black", "linewidth": 2})
+    for patch, c in zip(bp["boxes"], class_features):
+        patch.set_facecolor(color_map[c])
+        patch.set_alpha(0.75)
+    ax.set_facecolor(group_colors[fi])
+    ax.set_title(feat_name, fontsize=9, fontweight="bold")
+    ax.set_xticks(range(1, n_classes + 1))
+    ax.set_xticklabels(list(class_features.keys()), rotation=45, fontsize=7, ha="right")
+    ax.grid(axis="y", alpha=0.3)
+
+plt.tight_layout()
+plt.savefig("eda/kontury_boxploty_cech.png", dpi=150)
+plt.close()
+
+# -----[ 2. Heatmapa korelacji 12×12 ]----------------------------------
+print("  2/6 Heatmapa korelacji 12×12...")
+
+all_feats = np.vstack(list(class_features.values()))
+corr = np.corrcoef(all_feats.T)
+
+fig, ax = plt.subplots(figsize=(10, 8))
+im = ax.imshow(corr, vmin=-1, vmax=1, cmap="RdBu_r", aspect="auto")
+plt.colorbar(im, ax=ax, label="Współczynnik Pearsona")
+ax.set_xticks(range(N_FEATURES))
+ax.set_xticklabels(FEATURE_NAMES, rotation=45, ha="right", fontsize=9)
+ax.set_yticks(range(N_FEATURES))
+ax.set_yticklabels(FEATURE_NAMES, fontsize=9)
+for i in range(N_FEATURES):
+    for j in range(N_FEATURES):
+        ax.text(j, i, f"{corr[i,j]:.2f}", ha="center", va="center",
+                fontsize=7, color="white" if abs(corr[i,j]) > 0.6 else "black")
+for b in [2, 8, 10]:
+    ax.axhline(b - 0.5, color="white", linewidth=2)
+    ax.axvline(b - 0.5, color="white", linewidth=2)
+ax.set_title("Macierz korelacji Pearsona — 12 cech konturowych (Euro)\n"
+             "linie = granice grup (Hough | Profil 6 stref | Hierarchia | Kątowe)", fontsize=12)
+plt.tight_layout()
+plt.savefig("eda/kontury_korelacja_cech.png", dpi=150)
+plt.close()
+
+# -----[ 3. Heatmapa klasy × 12 cech (znorm.) ]------------------------
+print("  3/6 Heatmapa klasy × cechy...")
+
+mean_matrix = np.array([class_features[c].mean(axis=0) for c in class_features])
+col_range = mean_matrix.max(axis=0) - mean_matrix.min(axis=0)
+col_range[col_range == 0] = 1.0
+mean_norm = (mean_matrix - mean_matrix.min(axis=0)) / col_range
+
+fig, ax = plt.subplots(figsize=(14, 5))
+im = ax.imshow(mean_norm, cmap="YlOrRd", aspect="auto", vmin=0, vmax=1)
+plt.colorbar(im, ax=ax, label="Wartość (znorm. per cecha)")
+ax.set_xticks(range(N_FEATURES))
+ax.set_xticklabels(FEATURE_NAMES, rotation=45, ha="right", fontsize=9)
+ax.set_yticks(range(n_classes))
+ax.set_yticklabels(list(class_features.keys()), fontsize=10)
+for i in range(n_classes):
+    for j in range(N_FEATURES):
+        ax.text(j, i, f"{mean_norm[i,j]:.2f}", ha="center", va="center",
+                fontsize=7, color="white" if mean_norm[i,j] > 0.65 else "black")
+for b in [2, 8, 10]:
+    ax.axvline(b - 0.5, color="dodgerblue", linewidth=2)
+ax.set_title("Heatmapa: klasy Euro × 12 cech konturowych (srednie znormalizowane)\n"
+             "niebieski pasek = granica grup cech", fontsize=12)
+plt.tight_layout()
+plt.savefig("eda/kontury_heatmapa_klas.png", dpi=150)
+plt.close()
+
+# -----[ 4. Scatter kluczowych par cech ]-------------------------------
+print("  4/6 Scatter plot kluczowych par cech...")
+
+fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+fig.suptitle("Rozrzut kluczowych par cech — monety Euro", fontsize=13)
+
+pairs = [
+    ("n_circles",    "radius_ratio",
+     "HoughCircles: n_circles vs radius_ratio\ne_1/e_2 → 2 okręgi, radius_ratio > 0"),
+    ("edge_z1",      "edge_z6",
+     "Profil radialny: centrum vs obrzeże\nryfle → wysoka edge_z6 dla ct_10/20/50/e_1/e_2"),
+    ("n_holes",      "edge_ring_std",
+     "Hierarchia vs krawędź kątowa\nryfle regularne → niska edge_ring_std"),
+]
+
+for ax, (xname, yname, title) in zip(axes, pairs):
+    xi = FEATURE_NAMES.index(xname)
+    yi = FEATURE_NAMES.index(yname)
+    for c, feats in class_features.items():
+        ax.scatter(feats[:, xi], feats[:, yi],
+                   color=color_map[c], alpha=0.5, s=25, label=c)
+    ax.set_xlabel(xname, fontsize=10)
+    ax.set_ylabel(yname, fontsize=10)
+    ax.set_title(title, fontsize=9)
+    ax.legend(fontsize=7, ncol=2)
+    ax.grid(alpha=0.3)
+
+plt.tight_layout()
+plt.savefig("eda/kontury_scatter_cechy.png", dpi=150)
+plt.close()
+
+# -----[ 5. Srednie mapy krawędzi Canny per klasa ]--------------------
+print("  5/6 Srednie mapy krawędzi Canny...")
+
+fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+fig.suptitle("Srednie mapy krawędzi Canny per klasa Euro\n"
+             "(uśrednione mapy — podstawa do findContours)", fontsize=13)
+
+for ax, c in zip(axes.flatten(), euro_classes):
+    class_path = os.path.join(dir_out, c)
+    edge_imgs = []
+    for img_name in sorted(os.listdir(class_path)):
+        img = cv2.imread(os.path.join(class_path, img_name))
+        if img is None:
+            continue
+        img = cv2.resize(img, (128, 128))
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
+        blur = cv2.GaussianBlur(gray, (7, 7), 1.5)
+        edge_imgs.append(cv2.Canny(blur, 40, 120).astype(np.float32))
+    if edge_imgs:
+        ax.imshow(np.mean(edge_imgs, axis=0), cmap="hot")
+    ax.set_title(c, fontsize=10)
+    ax.axis("off")
+
+plt.tight_layout()
+plt.savefig("eda/kontury_srednie_canny.png", dpi=150)
+plt.close()
+
+# -----[ 6. Grupowany wykres srednich cech ]----------------------------
+print("  6/6 Grupowany wykres srednich cech...")
+
+x     = np.arange(N_FEATURES)
+bar_w = 0.8 / n_classes
+
+fig, ax = plt.subplots(figsize=(16, 5))
+for i, (c, row) in enumerate(zip(class_features.keys(), mean_norm)):
+    offset = (i - n_classes / 2 + 0.5) * bar_w
+    ax.bar(x + offset, row, width=bar_w, label=c, color=color_map[c], alpha=0.85)
+
+for start, end, col in [(0, 2, "#eef6ff"), (2, 8, "#eeffee"), (8, 10, "#ffeeee"), (10, 12, "#fff8ee")]:
+    ax.axvspan(start - 0.5, end - 0.5, color=col, zorder=0)
+
+ax.set_xticks(x)
+ax.set_xticklabels(FEATURE_NAMES, rotation=30, ha="right", fontsize=9)
+ax.set_ylabel("Srednia wartość cechy (znorm. per cecha)")
+ax.set_title("Porównanie klas — srednie 12 cech konturowych\n"
+             "tło = grupy: Hough / Profil 6 stref / Hierarchia / Kątowe")
+ax.legend(fontsize=8, ncol=4)
+ax.grid(axis="y", alpha=0.3)
+plt.tight_layout()
+plt.savefig("eda/kontury_srednie_cechy.png", dpi=150)
+plt.close()
+
+print("EDA zapisane!")
+print("  eda/kontury_boxploty_cech.png   — boxploty 12 cech (3 grupy z kolorowym tłem)")
+print("  eda/kontury_korelacja_cech.png  — heatmapa korelacji 12×12")
+print("  eda/kontury_heatmapa_klas.png   — heatmapa klasy × cechy")
+print("  eda/kontury_scatter_cechy.png   — scatter: Hough / profil radialny / hierarchia")
+print("  eda/kontury_srednie_canny.png   — srednie mapy Canny per klasa")
+print("  eda/kontury_srednie_cechy.png   — grupowany wykres srednich")
+
+print("\nZakończono generowanie EDA.")
