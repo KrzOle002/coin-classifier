@@ -1,0 +1,25 @@
+Klasyfikator: Extra Trees
+Dokladnosc (test): 1.0000
+F1 macro (test):   1.0000
+<<<<<<< HEAD
+CV accuracy: 0.9927 +/- 0.0032
+CV F1 macro: 0.9927 +/- 0.0032
+=======
+CV accuracy: 0.9932 +/- 0.0008
+CV F1 macro: 0.9932 +/- 0.0008
+>>>>>>> Julia
+
+              precision    recall  f1-score   support
+
+        ct_1       1.00      1.00      1.00        30
+       ct_10       1.00      1.00      1.00        30
+        ct_2       1.00      1.00      1.00        30
+       ct_20       1.00      1.00      1.00        30
+        ct_5       1.00      1.00      1.00        30
+       ct_50       1.00      1.00      1.00        30
+         e_1       1.00      1.00      1.00        30
+         e_2       1.00      1.00      1.00        30
+
+    accuracy                           1.00       240
+   macro avg       1.00      1.00      1.00       240
+weighted avg       1.00      1.00      1.00       240

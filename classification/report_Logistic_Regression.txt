@@ -1,0 +1,42 @@
+Klasyfikator: Logistic Regression
+<<<<<<< HEAD
+Dokladnosc (test): 0.9708
+F1 macro (test):   0.9709
+CV accuracy: 0.9659 +/- 0.0041
+CV F1 macro: 0.9659 +/- 0.0041
+
+              precision    recall  f1-score   support
+
+        ct_1       0.94      1.00      0.97        30
+       ct_10       0.97      0.97      0.97        30
+        ct_2       0.97      0.97      0.97        30
+       ct_20       1.00      0.97      0.98        30
+        ct_5       1.00      0.97      0.98        30
+       ct_50       0.94      0.97      0.95        30
+         e_1       0.97      0.93      0.95        30
+         e_2       1.00      1.00      1.00        30
+
+    accuracy                           0.97       240
+   macro avg       0.97      0.97      0.97       240
+weighted avg       0.97      0.97      0.97       240
+=======
+Dokladnosc (test): 0.9625
+F1 macro (test):   0.9626
+CV accuracy: 0.9677 +/- 0.0012
+CV F1 macro: 0.9677 +/- 0.0013
+
+              precision    recall  f1-score   support
+
+        ct_1       0.97      1.00      0.98        30
+       ct_10       0.88      0.97      0.92        30
+        ct_2       1.00      0.93      0.97        30
+       ct_20       1.00      0.93      0.97        30
+        ct_5       0.97      1.00      0.98        30
+       ct_50       0.94      1.00      0.97        30
+         e_1       0.97      0.97      0.97        30
+         e_2       1.00      0.90      0.95        30
+
+    accuracy                           0.96       240
+   macro avg       0.96      0.96      0.96       240
+weighted avg       0.96      0.96      0.96       240
+>>>>>>> Julia
