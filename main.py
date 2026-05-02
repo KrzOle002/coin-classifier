@@ -1,102 +1,81 @@
-import subprocess
+# -*- coding: utf-8 -*-
+"""
+main.py - punkt wejscia calego pipeline'u
+==========================================
+Uruchamia kolejno:
+  1. EDA          -> eda_output/
+  2. Wizualizacja krawedzi -> edge_viz_output/
+  3. PCA          -> pca_output/
+  4. Klasyfikacja -> classification_output/
+
+Kazdy modul mozna tez uruchomic osobno:
+  python eda.py
+  python edge_visualization.py
+  python pca.py
+  python classification.py
+"""
+
 import sys
-import time
-import os
+import io
+import traceback
+import importlib.util
 
-STEPS = [
-    {
-        "name": "EDA - Eksploracja danych i ujednolicenie",
-        "file": "eda.py",
-        "output_check": "dataset_out",
-    },
-    {
-        "name": "Edge Visualization - Wizualizacja krawędzi i profili pierścieniowych",
-        "file": "edge_visualization.py",
-        "output_check": "edges/canny_hog_wszystkie_klasy.png",
-    },
-    {
-        "name": "Classification - Klasyfikatory (LR, ET, Random Forest)",
-        "file": "classification.py",
-        "output_check": "classification/porownanie_dokladnosci.png",
-    },
-    {
-        "name": "Hard Pairs - Analiza trudnych par klas",
-        "file": "hard_pairs.py",
-        "output_check": "hard_pairs/porownanie_par.png",
-    },
-]
+# Ustaw UTF-8 raz, przed uruchomieniem modulow.
+# Zabezpieczenie: nie nadpisuj jesli stdout nie ma .buffer (np. redirect do pliku).
+if hasattr(sys.stdout, "buffer"):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
-def separator(char="=", width=60):
-    print(char * width)
 
-def run_step(step, index, total):
-    separator()
-    print(f"[{index}/{total}] {step['name']}")
-    separator()
-
-    if not os.path.isfile(step["file"]):
-        print(f"[BLAD] Nie znaleziono pliku: {step['file']}")
+def run_module(module_path: str, label: str) -> bool:
+    """Uruchom modul jako skrypt; zwroc True przy sukcesie."""
+    print("\n" + "#" * 60)
+    print("#  " + label)
+    print("#" * 60 + "\n")
+    try:
+        spec = importlib.util.spec_from_file_location("_mod", module_path)
+        mod  = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return True
+    except Exception:
+        print("\n[BLAD] Modul '" + module_path + "' zakonczyl sie z bledem:")
+        traceback.print_exc()
         return False
-
-    start = time.time()
-
-    result = subprocess.run(
-        [sys.executable, step["file"]],
-        capture_output=False
-    )
-
-    elapsed = time.time() - start
-
-    if result.returncode != 0:
-        print(f"\n[BLAD] Krok '{step['name']}' zakonczyl sie bledem (kod: {result.returncode}).")
-        return False
-
-    if not os.path.exists(step["output_check"]):
-        print(f"\n[OSTRZEZENIE] Oczekiwany wynik nie powstal: {step['output_check']}")
-    else:
-        print(f"\n[OK] Wynik zapisany: {step['output_check']}")
-
-    print(f"[CZAS] {elapsed:.1f}s")
-    return True
-
-
-def main():
-    separator("=")
-    print("  KLASYFIKACJA NOMINALOW MONET ")
-    print("  Autorzy: Krzysztof, Kacper, Julia")
-    separator("=")
-    print()
-
-    if not os.path.isdir("dataset"):
-        print("[BLAD] Nie znaleziono folderu 'dataset'.")
-        sys.exit(1)
-
-    total = len(STEPS)
-    start_total = time.time()
-    completed = 0
-
-    for i, step in enumerate(STEPS, start=1):
-        success = run_step(step, i, total)
-        if not success:
-            print(f"\nPotok zatrzymany na kroku {i}/{total}.")
-            sys.exit(1)
-        completed += 1
-        print()
-
-    total_time = time.time() - start_total
-    separator("=")
-    print(f"  GOTOWE! Wszystkie {completed}/{total} krokow wykonane.")
-    print(f"  Laczny czas: {total_time:.1f}s ({total_time/60:.1f} min)")
-    separator("=")
-    print()
-    print("Wyniki zapisane w folderach:")
-    print("  dataset_out/    - ujednolicone obrazy")
-    print("  eda/            - wykresy eksploracji danych")
-    print("  edges/          - wizualizacja pipeline krawędzi (Canny, kontury, profil pierścieniowy)")
-    print("  classification/ - klasyfikatory i macierze pomylek")
-    print("  models/         - zapisane modele (.joblib) + scaler")
-    print("  hard_pairs/     - analiza trudnych par klas")
 
 
 if __name__ == "__main__":
-    main()
+    steps = [
+        ("eda.py",                "KROK 1 - EDA (analiza eksploracyjna)"),
+        ("edge_visualization.py", "KROK 2 - Wizualizacja krawedzi i cech"),
+        ("pca.py",                "KROK 3 - Redukcja wymiarowosci (PCA)"),
+        ("classification.py",     "KROK 4 - Klasyfikacja i porownanie modeli"),
+    ]
+
+    # Filtr opcjonalny: python main.py eda pca
+    step_filter = set(sys.argv[1:])
+
+    ok_count  = 0
+    err_count = 0
+
+    for script, label in steps:
+        if step_filter:
+            key = script.replace(".py", "")
+            if not any(k in key for k in step_filter):
+                print("[pominieto] " + script)
+                continue
+
+        success = run_module(script, label)
+        if success:
+            ok_count += 1
+        else:
+            err_count += 1
+
+    print("\n" + "=" * 60)
+    print("  Pipeline zakonczony: " + str(ok_count) + " OK, " + str(err_count) + " BLAD(ow)")
+    print("=" * 60)
+    print("""
+Wyniki w katalogach:
+  eda_output/            - wykresy EDA
+  edge_viz_output/       - panele krawedzi klas
+  pca_output/            - wykresy PCA
+  classification_output/ - macierze pomylek, porownanie modeli, modele .joblib
+""")
