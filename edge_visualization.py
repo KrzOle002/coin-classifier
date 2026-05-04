@@ -1,198 +1,133 @@
+# -*- coding: utf-8 -*-
+"""
+Wizualizacja krawedzi i cech
+==============================
+Dla kazdej klasy generuje panel 3-elementowy:
+  1. Obraz oryginalny (szarosc)
+  2. Mapa krawedzi Canny
+  3. Lokalna gestosc krawedzi -- siatka 4×4 (heatmapa)
+  4. Projekcje pozioma i pionowa
+
+Pozwala ocenic, jak bardzo krawedzie roznia sie miedzy klasami.
+"""
+
 import os
 import cv2
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from skimage.feature import hog
+import matplotlib.gridspec as gridspec
 
-# Folder z ujednoliconymi obrazami
-dir_out = "dataset_out"
-os.makedirs("edges", exist_ok=True)
+from preprocessing import (DATASET_DIR, CLASSES, IMG_SIZE,
+                            BLUR_K, CANNY_LOW, CANNY_HIGH, GRID_N, PROJ_BINS,
+                            preprocess, extract_features, feature_names)
 
-classes = sorted(os.listdir(dir_out))
+OUTPUT_DIR = "edge_viz_output"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-print("Generowanie wizualizacji krawędzi...")
 
-for c in classes:
-    class_path = os.path.join(dir_out, c)
-    img_names = os.listdir(class_path)
-    if not img_names:
-        continue
+def get_first_image(cls: str) -> str:
+    d = os.path.join(DATASET_DIR, cls)
+    files = sorted([f for f in os.listdir(d)
+                    if f.lower().endswith((".jpg", ".jpeg", ".png", ".bmp"))])
+    return os.path.join(d, files[0])
 
-    # Bierzemy pierwsze dostępne zdjęcie z klasy
-    img_path = os.path.join(class_path, img_names[0])
-    img = cv2.imread(img_path)
-    if img is None:
-        continue
 
-    img = cv2.resize(img, (128, 128))
+# -- Panel dla kazdej klasy ----------------------------------------------------
+for cls in CLASSES:
+    path       = get_first_image(cls)
+    gray, edges = preprocess(path)
+    binary     = (edges > 0).astype(np.float32)
 
-    # =====[ Krok 1: Obraz wejściowy (grayscale) ]=====
-    gray = img if len(img.shape) == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Siatka gestosci
+    cell_h = IMG_SIZE // GRID_N
+    cell_w = IMG_SIZE // GRID_N
+    grid = np.zeros((GRID_N, GRID_N), dtype=np.float32)
+    for r in range(GRID_N):
+        for c in range(GRID_N):
+            cell = binary[r*cell_h:(r+1)*cell_h, c*cell_w:(c+1)*cell_w]
+            grid[r, c] = cell.mean()
 
-    # =====[ Krok 2: Rozmycie Gaussian ]=====
-    blurred = cv2.GaussianBlur(gray, (7, 7), 1.5)
+    # Projekcje
+    row_proj = binary.sum(axis=1)
+    col_proj = binary.sum(axis=0)
 
-    # =====[ Krok 3: Krawędzie Canny ]=====
-    edges = cv2.Canny(blurred, 40, 120)
+    # -- Rysuj -----------------------------------------------------------------
+    fig = plt.figure(figsize=(14, 4))
+    gs  = gridspec.GridSpec(1, 5, figure=fig, wspace=0.35)
 
-    # =====[ Krok 4: Kontury na obrazie ]=====
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contour_vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-    cv2.drawContours(contour_vis, contours, -1, (0, 255, 0), 1)
-    if contours:
-        largest = max(contours, key=cv2.contourArea)
-        cv2.drawContours(contour_vis, [largest], -1, (0, 0, 255), 2)
+    # 1. Oryginal
+    ax1 = fig.add_subplot(gs[0])
+    ax1.imshow(gray, cmap="gray")
+    ax1.set_title("Szarosc", fontsize=9)
+    ax1.axis("off")
 
-    # =====[ Krok 5: Okręgi HoughCircles ]=====
-    circles = cv2.HoughCircles(
-        blurred, cv2.HOUGH_GRADIENT,
-        dp=1.2, minDist=15,
-        param1=60, param2=30,
-        minRadius=10, maxRadius=60,
-    )
-    circle_vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-    n_circles = 0
-    if circles is not None:
-        circles_int = np.round(circles[0]).astype(int)
-        n_circles = len(circles_int)
-        for (x, y, r) in circles_int:
-            cv2.circle(circle_vis, (x, y), r, (0, 255, 0), 2)
-            cv2.circle(circle_vis, (x, y), 2, (0, 0, 255), 3)
+    # 2. Krawedzie Canny
+    ax2 = fig.add_subplot(gs[1])
+    ax2.imshow(edges, cmap="gray")
+    ax2.set_title("Krawedzie Canny", fontsize=9)
+    ax2.axis("off")
 
-    # =====[ Krok 6: HOG — wizualizacja gradientów ]=====
-    # hog() z visualize=True zwraca obraz HOG pokazujący kierunki gradientów
-    # To jest dokładnie ten sam HOG co używamy w extract_features() w preprocessing.py
-    _, hog_image = hog(
-        gray,
-        orientations=9,
-        pixels_per_cell=(16, 16),
-        cells_per_block=(2, 2),
-        block_norm="L2-Hys",
-        visualize=True,
-        feature_vector=True,
-    )
-    # Skalujemy do [0,255] żeby dobrze wyglądało na wykresie
-    hog_vis = (hog_image / hog_image.max() * 255).astype(np.uint8) if hog_image.max() > 0 else hog_image.astype(np.uint8)
+    # 3. Heatmapa siatki 4×4
+    ax3 = fig.add_subplot(gs[2])
+    im = ax3.imshow(grid, cmap="YlOrRd", vmin=0, vmax=0.3)
+    ax3.set_title(f"Gestosc {GRID_N}×{GRID_N}", fontsize=9)
+    ax3.set_xticks([])
+    ax3.set_yticks([])
+    plt.colorbar(im, ax=ax3, fraction=0.046, pad=0.04)
 
-    # =====[ Wykres — 6 kroków obok siebie ]=====
-    fig, axes = plt.subplots(1, 6, figsize=(22, 4))
-    fig.suptitle(f"Pipeline wykrywania krawędzi — klasa: {c}", fontsize=13)
+    # 4. Projekcja pozioma (wiersze)
+    ax4 = fig.add_subplot(gs[3])
+    ax4.barh(range(len(row_proj)), row_proj, color="steelblue", height=1.0)
+    ax4.invert_yaxis()
+    ax4.set_title("Proj. pionowa\n(sumy wierszy)", fontsize=9)
+    ax4.set_xlabel("suma krawedzi")
+    ax4.set_ylabel("wiersz")
 
-    axes[0].imshow(gray, cmap="gray")
-    axes[0].set_title("1. Obraz wejściowy\n(grayscale)")
+    # 5. Projekcja pionowa (kolumny)
+    ax5 = fig.add_subplot(gs[4])
+    ax5.bar(range(len(col_proj)), col_proj, color="coral", width=1.0)
+    ax5.set_title("Proj. pozioma\n(sumy kolumn)", fontsize=9)
+    ax5.set_xlabel("kolumna")
+    ax5.set_ylabel("suma krawedzi")
 
-    axes[1].imshow(blurred, cmap="gray")
-    axes[1].set_title("2. Gaussian Blur\n(redukcja szumu)")
-
-    axes[2].imshow(edges, cmap="gray")
-    axes[2].set_title("3. Canny\n(krawędzie)")
-
-    axes[3].imshow(cv2.cvtColor(contour_vis, cv2.COLOR_BGR2RGB))
-    axes[3].set_title(f"4. Kontury\n(zielony=wszystkie, czerwony=największy)")
-
-    axes[4].imshow(cv2.cvtColor(circle_vis, cv2.COLOR_BGR2RGB))
-    axes[4].set_title(f"5. HoughCircles\n({n_circles} okręgów)")
-
-    axes[5].imshow(hog_vis, cmap="hot")
-    axes[5].set_title("6. HOG\n(gradienty — używane do klasyfikacji)")
-
-    for ax in axes:
-        ax.axis("off")
-
-    plt.tight_layout()
-    plt.savefig(f"edges/pipeline_{c}.png", dpi=150)
+    fig.suptitle(f"Klasa: {cls}", fontsize=13, fontweight="bold")
+    plt.savefig(os.path.join(OUTPUT_DIR, f"{cls}_edge_panel.png"),
+                dpi=110, bbox_inches="tight")
     plt.close()
-    print(f"Zapisano: edges/pipeline_{c}.png")
+    print(f"[zapisano] {OUTPUT_DIR}/{cls}_edge_panel.png")
 
-# =====[ Zbiorczy wykres wszystkich klas — Canny i HOG obok siebie ]=====
-print("\nGenerowanie zbiorczego wykresu Canny + HOG...")
 
-fig, axes = plt.subplots(4, 4, figsize=(16, 16))
-fig.suptitle("Krawędzie Canny i HOG dla wszystkich klas", fontsize=14)
+# -- Zbiorczy wykres: siatki gestosci dla wszystkich klas ---------------------
+fig, axes = plt.subplots(2, 4, figsize=(13, 7))
+axes = axes.flatten()
 
-# 2 kolumny na klasę: [Canny, HOG] × 8 klas → 4 wiersze × 4 kolumny
-for idx, c in enumerate(classes):
-    class_path = os.path.join(dir_out, c)
-    img_names = os.listdir(class_path)
+all_grids = {}
+for i, cls in enumerate(CLASSES):
+    path       = get_first_image(cls)
+    gray, edges = preprocess(path)
+    binary     = (edges > 0).astype(np.float32)
+    cell_h = IMG_SIZE // GRID_N
+    cell_w = IMG_SIZE // GRID_N
+    grid = np.zeros((GRID_N, GRID_N), dtype=np.float32)
+    for r in range(GRID_N):
+        for c in range(GRID_N):
+            cell = binary[r*cell_h:(r+1)*cell_h, c*cell_w:(c+1)*cell_w]
+            grid[r, c] = cell.mean()
+    all_grids[cls] = grid
 
-    row = idx // 2
-    col_canny = (idx % 2) * 2
-    col_hog   = col_canny + 1
+vmax = max(g.max() for g in all_grids.values())
+for i, cls in enumerate(CLASSES):
+    im = axes[i].imshow(all_grids[cls], cmap="YlOrRd", vmin=0, vmax=vmax)
+    axes[i].set_title(cls, fontsize=11, fontweight="bold")
+    axes[i].set_xticks([])
+    axes[i].set_yticks([])
 
-    if not img_names:
-        axes[row][col_canny].axis("off")
-        axes[row][col_hog].axis("off")
-        continue
-
-    img = cv2.imread(os.path.join(class_path, img_names[0]))
-    if img is None:
-        axes[row][col_canny].axis("off")
-        axes[row][col_hog].axis("off")
-        continue
-
-    img = cv2.resize(img, (128, 128))
-    gray = img if len(img.shape) == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (7, 7), 1.5)
-    edges = cv2.Canny(blurred, 40, 120)
-
-    _, hog_image = hog(
-        gray,
-        orientations=9,
-        pixels_per_cell=(16, 16),
-        cells_per_block=(2, 2),
-        block_norm="L2-Hys",
-        visualize=True,
-        feature_vector=True,
-    )
-    hog_vis = (hog_image / hog_image.max() * 255).astype(np.uint8) if hog_image.max() > 0 else hog_image.astype(np.uint8)
-
-    axes[row][col_canny].imshow(edges, cmap="gray")
-    axes[row][col_canny].set_title(f"{c} — Canny", fontsize=9)
-    axes[row][col_canny].axis("off")
-
-    axes[row][col_hog].imshow(hog_vis, cmap="hot")
-    axes[row][col_hog].set_title(f"{c} — HOG", fontsize=9)
-    axes[row][col_hog].axis("off")
-
-plt.tight_layout()
-plt.savefig("edges/canny_hog_wszystkie_klasy.png", dpi=150)
+fig.suptitle(f"Siatka gestosci krawedzi {GRID_N}×{GRID_N} -- porownanie klas",
+             fontsize=13, fontweight="bold")
+plt.colorbar(im, ax=axes, shrink=0.6, label="Gestosc krawedzi")
+plt.savefig(os.path.join(OUTPUT_DIR, "all_classes_grid_density.png"),
+            dpi=120, bbox_inches="tight")
 plt.close()
-print("Zapisano: edges/canny_hog_wszystkie_klasy.png")
+print(f"[zapisano] {OUTPUT_DIR}/all_classes_grid_density.png")
 
-# Pozostawiamy też oryginalny plik tylko z Canny (sprawdzany przez main.py)
-fig, axes = plt.subplots(2, 4, figsize=(16, 8))
-fig.suptitle("Krawędzie Canny dla wszystkich klas", fontsize=14)
-
-for ax, c in zip(axes.flatten(), classes):
-    class_path = os.path.join(dir_out, c)
-    img_names = os.listdir(class_path)
-    if not img_names:
-        ax.axis("off")
-        continue
-
-    img = cv2.imread(os.path.join(class_path, img_names[0]))
-    if img is None:
-        ax.axis("off")
-        continue
-
-    img = cv2.resize(img, (128, 128))
-    gray = img if len(img.shape) == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (7, 7), 1.5)
-    edges = cv2.Canny(blurred, 40, 120)
-
-    ax.imshow(edges, cmap="gray")
-    ax.set_title(c, fontsize=10)
-    ax.axis("off")
-
-plt.tight_layout()
-plt.savefig("edges/canny_wszystkie_klasy.png", dpi=150)
-plt.close()
-print("Zapisano: edges/canny_wszystkie_klasy.png")
-
-print("\nZakończono generowanie wizualizacji krawędzi.")
-print("Wyniki w folderze: edges/")
-print("  pipeline_[klasa].png       — 6-krokowy pipeline z HOG")
-print("  canny_hog_wszystkie_klasy.png — Canny i HOG obok siebie dla każdej klasy")
-print("  canny_wszystkie_klasy.png  — samo Canny (wszystkie klasy)")
+print(f"\n[Wizualizacja zakonczona -- wyniki w '{OUTPUT_DIR}/']")
