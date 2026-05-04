@@ -95,8 +95,7 @@ print("\n-- Najwazniejsze cechy dla PC1 i PC2 ---------------------------")
 for pc_idx, pc_name in enumerate(["PC1", "PC2"]):
     loadings = pca_2d.components_[pc_idx]
     top3_idx = np.argsort(np.abs(loadings))[::-1][:3]
-    top3 = [(fnames[j], loadings[j]) 
-        for j in top3_idx if j < len(fnames)]
+    top3 = [(fnames[j], loadings[j]) for j in top3_idx]
     print(f"  {pc_name}: " + ", ".join(f"{n} ({v:+.3f})" for n, v in top3))
 
 print(f"\n[PCA zakonczona -- wyniki w '{OUTPUT_DIR}/']")
