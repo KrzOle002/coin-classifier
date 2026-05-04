@@ -54,20 +54,10 @@ def preprocess(path: str) -> tuple[np.ndarray, np.ndarray]:
     img = cv2.imread(path)
     if img is None:
         raise FileNotFoundError(f"Nie mozna wczytac: {path}")
-    #konwersja do szarosci
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    #resize
-    gray = cv2.resize(gray, (IMG_SIZE, IMG_SIZE))
-    #CLAHE (poprawa kontrastu)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    gray = clahe.apply(gray)
-    #blur
-    blur = cv2.GaussianBlur(gray, (BLUR_K, BLUR_K), 0)
-    #Canny
+    gray  = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    gray  = cv2.resize(gray, (IMG_SIZE, IMG_SIZE))
+    blur  = cv2.GaussianBlur(gray, (BLUR_K, BLUR_K), 0)
     edges = cv2.Canny(blur, CANNY_LOW, CANNY_HIGH)
-    #morfologia (usuwanie szumu)
-    kernel = np.ones((3, 3), np.uint8)
-    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
     return gray, edges
 
 
@@ -126,18 +116,7 @@ def extract_features(edges: np.ndarray) -> np.ndarray:
     projections = np.concatenate([row_proj, col_proj])       # (32,)
 
     # -- Zlozenie ---------------------------------------------------------------
-    
-    # -- (d) Dodatkowa cecha: pole największego konturu ------------------------
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    if contours:
-        cnt = max(contours, key=cv2.contourArea)
-        area = cv2.contourArea(cnt) / (IMG_SIZE * IMG_SIZE)
-    else:
-        area = 0.0
-    area = np.array([area], dtype=np.float32)
-
-    return np.concatenate([centroid, grid_density, projections, area])  # (50,)
+    return np.concatenate([centroid, grid_density, projections])  # (50,)
 
 
 def feature_names() -> list[str]:
