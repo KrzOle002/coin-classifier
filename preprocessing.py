@@ -135,9 +135,7 @@ def feature_names() -> list[str]:
 # -- Augmentacja ---------------------------------------------------------------
 def augment_gray(gray: np.ndarray) -> list[np.ndarray]:
     """
-    Zwraca 7 wersji obrazu w skali szarosci:
-    oryginał + obroty co 60° (5 szt.) + odbicie poziome.
-    Moneta jest okragla — kazdy obrot to poprawna probka tej samej klasy.
+    Zwraca 7 wersji obrazu: oryginal + obroty co 60 stopni (5 szt.) + flip poziomy.
     """
     h, w = gray.shape
     cx, cy = w / 2.0, h / 2.0
@@ -181,13 +179,13 @@ def load_dataset(verbose: bool = True) -> tuple[np.ndarray, np.ndarray, list[str
 def prepare_data(verbose: bool = True):
     """
     Zaladuj dane, podziel na train/test, zastosuj StandardScaler.
-    Augmentacja (7x) TYLKO na zbiorze treningowym — brak wycieku do testu.
+    Augmentacja (7x) TYLKO na zbiorze treningowym -- brak wycieku do testu.
     Zwraca: X_train, X_test, y_train, y_test, scaler, feature_names_list
     """
     if verbose:
         print("Wczytywanie danych i ekstrakcja cech...")
 
-    # Wczytaj surowe obrazy i etykiety (przed podziałem)
+    # Wczytaj surowe obrazy przed podzialem
     raw_X, raw_y, raw_paths = [], [], []
     for cls in CLASSES:
         cls_dir = os.path.join(DATASET_DIR, cls)
@@ -209,7 +207,7 @@ def prepare_data(verbose: bool = True):
     if verbose:
         print(f"  Zaladowano {len(raw_y)} obrazow oryginalnych")
 
-    # Podział indeksów PRZED augmentacją
+    # Podzial indeksow PRZED augmentacja
     idx = np.arange(len(raw_y))
     idx_train, idx_test = train_test_split(
         idx, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=raw_y

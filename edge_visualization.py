@@ -2,11 +2,12 @@
 """
 Wizualizacja krawedzi i cech
 ==============================
-Dla kazdej klasy generuje panel 3-elementowy:
+Dla kazdej klasy generuje panel 5-elementowy:
   1. Obraz oryginalny (szarosc)
   2. Mapa krawedzi Canny
-  3. Lokalna gestosc krawedzi -- siatka 4×4 (heatmapa)
-  4. Projekcje pozioma i pionowa
+  3. Lokalna gestosc krawedzi -- siatka 4x4 (heatmapa)
+  4. Projekcja pionowa (sumy wierszy)
+  5. Projekcja pozioma (sumy kolumn)
 
 Pozwala ocenic, jak bardzo krawedzie roznia sie miedzy klasami.
 """
@@ -34,9 +35,9 @@ def get_first_image(cls: str) -> str:
 
 # -- Panel dla kazdej klasy ----------------------------------------------------
 for cls in CLASSES:
-    path       = get_first_image(cls)
+    path        = get_first_image(cls)
     gray, edges = preprocess(path)
-    binary     = (edges > 0).astype(np.float32)
+    binary      = (edges > 0).astype(np.float32)
 
     # Siatka gestosci
     cell_h = IMG_SIZE // GRID_N
@@ -67,15 +68,15 @@ for cls in CLASSES:
     ax2.set_title("Krawedzie Canny", fontsize=9)
     ax2.axis("off")
 
-    # 3. Heatmapa siatki 4×4
+    # 3. Heatmapa siatki 4x4
     ax3 = fig.add_subplot(gs[2])
     im = ax3.imshow(grid, cmap="YlOrRd", vmin=0, vmax=0.3)
-    ax3.set_title(f"Gestosc {GRID_N}×{GRID_N}", fontsize=9)
+    ax3.set_title(f"Gestosc {GRID_N}x{GRID_N}", fontsize=9)
     ax3.set_xticks([])
     ax3.set_yticks([])
     plt.colorbar(im, ax=ax3, fraction=0.046, pad=0.04)
 
-    # 4. Projekcja pozioma (wiersze)
+    # 4. Projekcja pionowa (wiersze)
     ax4 = fig.add_subplot(gs[3])
     ax4.barh(range(len(row_proj)), row_proj, color="steelblue", height=1.0)
     ax4.invert_yaxis()
@@ -83,7 +84,7 @@ for cls in CLASSES:
     ax4.set_xlabel("suma krawedzi")
     ax4.set_ylabel("wiersz")
 
-    # 5. Projekcja pionowa (kolumny)
+    # 5. Projekcja pozioma (kolumny)
     ax5 = fig.add_subplot(gs[4])
     ax5.bar(range(len(col_proj)), col_proj, color="coral", width=1.0)
     ax5.set_title("Proj. pozioma\n(sumy kolumn)", fontsize=9)
@@ -103,9 +104,9 @@ axes = axes.flatten()
 
 all_grids = {}
 for i, cls in enumerate(CLASSES):
-    path       = get_first_image(cls)
+    path        = get_first_image(cls)
     gray, edges = preprocess(path)
-    binary     = (edges > 0).astype(np.float32)
+    binary      = (edges > 0).astype(np.float32)
     cell_h = IMG_SIZE // GRID_N
     cell_w = IMG_SIZE // GRID_N
     grid = np.zeros((GRID_N, GRID_N), dtype=np.float32)
@@ -122,7 +123,7 @@ for i, cls in enumerate(CLASSES):
     axes[i].set_xticks([])
     axes[i].set_yticks([])
 
-fig.suptitle(f"Siatka gestosci krawedzi {GRID_N}×{GRID_N} -- porownanie klas",
+fig.suptitle(f"Siatka gestosci krawedzi {GRID_N}x{GRID_N} -- porownanie klas",
              fontsize=13, fontweight="bold")
 plt.colorbar(im, ax=axes, shrink=0.6, label="Gestosc krawedzi")
 plt.savefig(os.path.join(OUTPUT_DIR, "all_classes_grid_density.png"),

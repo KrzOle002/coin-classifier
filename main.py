@@ -15,7 +15,7 @@ STEPS = [
         "output_check": "edge_viz_output/all_classes_grid_density.png",
     },
     {
-        "name": "Classification - Klasyfikatory (LR, ET, Random Forest)",
+        "name": "Classification - Klasyfikatory (SVM, ET, Random Forest)",
         "file": "classification.py",
         "output_check": "classification/porownanie_dokladnosci.png",
     },
