@@ -2,7 +2,11 @@
 __pycache__/
 *.py[codz]
 *$py.class
-
+/eda
+/models
+/edge_viz_output
+/classification
+/hard_pairs
 # C extensions
 *.so
 
