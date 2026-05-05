@@ -7,12 +7,12 @@ STEPS = [
     {
         "name": "EDA - Eksploracja danych i ujednolicenie",
         "file": "eda.py",
-        "output_check": "dataset_out",
+        "output_check": "eda",
     },
     {
-        "name": "Edge Visualization - Wizualizacja krawędzi i HOG",
+        "name": "Edge Visualization - Wizualizacja krawędzi i gestosci",
         "file": "edge_visualization.py",
-        "output_check": "edges/canny_hog_wszystkie_klasy.png",
+        "output_check": "edge_viz_output/all_classes_grid_density.png",
     },
     {
         "name": "Classification - Klasyfikatory (LR, ET, Random Forest)",
@@ -90,12 +90,11 @@ def main():
     separator("=")
     print()
     print("Wyniki zapisane w folderach:")
-    print("  dataset_out/    - ujednolicone obrazy")
-    print("  eda/            - wykresy eksploracji danych")
-    print("  edges/          - wizualizacja pipeline krawędzi (Canny, kontury, HOG)")
-    print("  classification/ - klasyfikatory i macierze pomylek")
-    print("  models/         - zapisane modele (.joblib) + scaler")
-    print("  hard_pairs/     - analiza trudnych par klas")
+    print("  eda/              - wykresy eksploracji danych")
+    print("  edge_viz_output/  - wizualizacja krawedzi Canny i siatek gestosci")
+    print("  classification/   - klasyfikatory i macierze pomylek")
+    print("  models/           - zapisane modele (.joblib) + scaler")
+    print("  hard_pairs/       - analiza trudnych par klas")
 
 
 if __name__ == "__main__":

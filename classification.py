@@ -4,9 +4,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os
 import joblib
-from sklearn.model_selection import cross_val_score
+
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
 from sklearn.metrics import (
     classification_report,
     confusion_matrix,
@@ -17,23 +17,22 @@ from sklearn.metrics import (
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from preprocessing import prepare_dataset
+from preprocessing import prepare_data, CLASSES
 
 os.makedirs("classification", exist_ok=True)
 os.makedirs("models", exist_ok=True)
 
 print("Wczytywanie i przetwarzanie danych...")
-# prepare_dataset() robi podział PRZED augmentacją i fituje scaler tylko na train
-X_train, X_test, y_train, y_test, scaler = prepare_dataset()
+X_train, X_test, y_train, y_test, scaler, fnames = prepare_data()
 
-classes = sorted(np.unique(y_train))
+classes = CLASSES
 print(f"Zaladowano dane. Klasy: {classes}")
 print(f"Train: {len(X_train)} probek | Test: {len(X_test)} probek")
 
 # Parametry zgodne z planem projektu
 classifiers = {
-    "Logistic Regression": LogisticRegression(
-        max_iter=1000, random_state=42
+    "SVM": SVC(
+        kernel="rbf", C=10, gamma="scale", random_state=42
     ),
     "Extra Trees": ExtraTreesClassifier(
         n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1
@@ -60,27 +59,19 @@ for name, clf in classifiers.items():
     print(f"Dokladnosc (test): {acc:.4f} ({acc*100:.2f}%)")
     print(f"F1 macro (test):   {f1:.4f}")
 
-    # Cross-walidacja na zbiorze treningowym (nie całym — bez leakage)
-    print("Cross-walidacja (3-fold na danych treningowych)...")
-    cv_acc = cross_val_score(clf, X_train, y_train, cv=3, scoring="accuracy", n_jobs=-1)
-    cv_f1  = cross_val_score(clf, X_train, y_train, cv=3, scoring="f1_macro",  n_jobs=-1)
-    print(f"CV accuracy: {cv_acc.mean():.4f} +/- {cv_acc.std():.4f}")
-    print(f"CV F1 macro: {cv_f1.mean():.4f} +/- {cv_f1.std():.4f}")
-
-    report = classification_report(y_test, y_pred, target_names=classes)
+    label_indices = list(range(len(classes)))
+    report = classification_report(y_test, y_pred, labels=label_indices, target_names=classes)
     print(f"\nRaport klasyfikacji:\n{report}")
 
     report_path = f"classification/report_{name.replace(' ', '_')}.txt"
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(f"Klasyfikator: {name}\n")
         f.write(f"Dokladnosc (test): {acc:.4f}\n")
-        f.write(f"F1 macro (test):   {f1:.4f}\n")
-        f.write(f"CV accuracy: {cv_acc.mean():.4f} +/- {cv_acc.std():.4f}\n")
-        f.write(f"CV F1 macro: {cv_f1.mean():.4f} +/- {cv_f1.std():.4f}\n\n")
+        f.write(f"F1 macro (test):   {f1:.4f}\n\n")
         f.write(report)
     print(f"Raport zapisany: {report_path}")
 
-    cm = confusion_matrix(y_test, y_pred, labels=classes)
+    cm = confusion_matrix(y_test, y_pred, labels=label_indices)
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
 
     fig, ax = plt.subplots(figsize=(14, 12))
@@ -93,12 +84,9 @@ for name, clf in classifiers.items():
     print(f"Macierz pomylek zapisana: {cm_path}")
 
     results[name] = {
-        "accuracy":  acc,
-        "f1":        f1,
-        "cv_mean":   cv_acc.mean(),
-        "cv_std":    cv_acc.std(),
-        "cv_f1":     cv_f1.mean(),
-        "model":     clf,
+        "accuracy": acc,
+        "f1":       f1,
+        "model":    clf,
     }
     trained_models[name] = clf
 
@@ -114,16 +102,16 @@ print("\nScaler zapisany: models/scaler.joblib")
 #=====[ Tabela zbiorcza wyników ]=====
 
 print("\nTabela zbiorcza wynikow:")
-print(f"{'Klasyfikator':<20} {'Accuracy':>10} {'F1 macro':>10} {'CV Accuracy':>12} {'CV F1':>10}")
-print("-" * 65)
+print(f"{'Klasyfikator':<20} {'Accuracy':>10} {'F1 macro':>10}")
+print("-" * 43)
 for name, r in results.items():
-    print(f"{name:<20} {r['accuracy']:>10.4f} {r['f1']:>10.4f} {r['cv_mean']:>12.4f} {r['cv_f1']:>10.4f}")
+    print(f"{name:<20} {r['accuracy']:>10.4f} {r['f1']:>10.4f}")
 
 with open("classification/tabela_zbiorcza.txt", "w", encoding="utf-8") as f:
-    f.write(f"{'Klasyfikator':<20} {'Accuracy':>10} {'F1 macro':>10} {'CV Accuracy':>12} {'CV F1':>10}\n")
-    f.write("-" * 65 + "\n")
+    f.write(f"{'Klasyfikator':<20} {'Accuracy':>10} {'F1 macro':>10}\n")
+    f.write("-" * 43 + "\n")
     for name, r in results.items():
-        f.write(f"{name:<20} {r['accuracy']:>10.4f} {r['f1']:>10.4f} {r['cv_mean']:>12.4f} {r['cv_f1']:>10.4f}\n")
+        f.write(f"{name:<20} {r['accuracy']:>10.4f} {r['f1']:>10.4f}\n")
 print("Tabela zapisana: classification/tabela_zbiorcza.txt")
 
 #=====[ Wykres porównawczy — accuracy i F1 ]=====
@@ -134,13 +122,11 @@ names = list(results.keys())
 x = np.arange(len(names))
 width = 0.2
 
-fig, ax = plt.subplots(figsize=(12, 6))
-b1 = ax.bar(x - 1.5*width, [results[n]["accuracy"] for n in names], width, label="Test accuracy",  color="steelblue")
-b2 = ax.bar(x - 0.5*width, [results[n]["f1"]       for n in names], width, label="Test F1 macro",  color="cornflowerblue")
-b3 = ax.bar(x + 0.5*width, [results[n]["cv_mean"]  for n in names], width, label="CV accuracy",    color="darkorange")
-b4 = ax.bar(x + 1.5*width, [results[n]["cv_f1"]    for n in names], width, label="CV F1 macro",    color="sandybrown")
+fig, ax = plt.subplots(figsize=(10, 6))
+b1 = ax.bar(x - width/2, [results[n]["accuracy"] for n in names], width, label="Test accuracy", color="steelblue")
+b2 = ax.bar(x + width/2, [results[n]["f1"]       for n in names], width, label="Test F1 macro", color="cornflowerblue")
 
-for bars in [b1, b2, b3, b4]:
+for bars in [b1, b2]:
     for bar in bars:
         ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.005,
                 f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=8)

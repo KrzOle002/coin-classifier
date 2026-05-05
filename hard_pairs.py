@@ -6,10 +6,10 @@ import os
 import joblib
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from preprocessing import prepare_dataset
+from preprocessing import prepare_data, CLASSES, CLASS_TO_IDX
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
 from sklearn.metrics import (
     confusion_matrix,
     ConfusionMatrixDisplay,
@@ -20,7 +20,7 @@ from sklearn.metrics import (
 os.makedirs("hard_pairs", exist_ok=True)
 
 print("Wczytywanie i przetwarzanie danych...")
-X_train_full, X_test_full, y_train_full, y_test_full, scaler = prepare_dataset()
+X_train_full, X_test_full, y_train_full, y_test_full, scaler, fnames = prepare_data()
 
 # Łączymy train i test z powrotem żeby filtrować pary — pary mają własny podział
 X_all = np.vstack([X_train_full, X_test_full])
@@ -32,9 +32,9 @@ classifiers = {}
 models_dir = "models"
 
 clf_definitions = {
-    "Logistic Regression": LogisticRegression(max_iter=1000, random_state=42),
-    "Extra Trees":         ExtraTreesClassifier(n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1),
-    "Random Forest":       RandomForestClassifier(n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1),
+    "SVM":         SVC(kernel="rbf", C=10, gamma="scale", random_state=42),
+    "Extra Trees": ExtraTreesClassifier(n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1),
+    "Random Forest": RandomForestClassifier(n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1),
 }
 
 for name in clf_definitions:
@@ -54,8 +54,12 @@ for name in clf_definitions:
 # ten sam kolor lub podobny rozmiar.
 
 hard_pairs = [
-    ("ct_1",  "ct_2"),    # male miedziane eurocenty
-    ("ct_10", "ct_20"),   # zolte eurocenty
+    ("ct_1",  "ct_2"),
+    ("ct_1",  "ct_10"),
+    ("ct_2",  "ct_20"), 
+    ("ct_1", "e_1"), 
+    ("ct_2",  "e_2"), 
+    ("ct_10", "ct_20"),  
     ("ct_1",  "ct_5"),    # male miedziane eurocenty
     ("ct_20", "ct_50"),   # zolte eurocenty
     ("e_1",   "e_2"),     # srebrno-zolte euro
@@ -66,20 +70,24 @@ hard_pairs = [
 all_results = []
 
 for cls_a, cls_b in hard_pairs:
+    idx_a = CLASS_TO_IDX.get(cls_a)
+    idx_b = CLASS_TO_IDX.get(cls_b)
+    if idx_a is None or idx_b is None:
+        print(f"  [pominieto] Klasa nieznana: {cls_a} lub {cls_b}")
+        continue
+
     print(f"\n{'='*50}")
     print(f"Para: {cls_a} vs {cls_b}")
     print(f"{'='*50}")
 
-    # Filtrujemy tylko probki nalezace do tej pary klas
-    mask = (y_all == cls_a) | (y_all == cls_b)
+    mask = (y_all == idx_a) | (y_all == idx_b)
     X = X_all[mask]
     y = y_all[mask]
 
-    n_a = np.sum(y == cls_a)
-    n_b = np.sum(y == cls_b)
+    n_a = np.sum(y == idx_a)
+    n_b = np.sum(y == idx_b)
     print(f"Liczba probek: {cls_a}={n_a}, {cls_b}={n_b}, lacznie={len(y)}")
 
-    # Podział 80/20 dla tej pary
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
@@ -87,8 +95,6 @@ for cls_a, cls_b in hard_pairs:
     pair_results = {"para": f"{cls_a} vs {cls_b}"}
 
     for name, clf in classifiers.items():
-        # Jeśli model wczytany z pliku — predyktujemy bezpośrednio na podzbiorze
-        # (model widział inne klasy, ale predict działa poprawnie dla podzbioru)
         y_pred = clf.predict(X_test)
         acc = accuracy_score(y_test, y_pred)
         f1  = f1_score(y_test, y_pred, average="macro")
@@ -138,7 +144,12 @@ print("Zapisano: hard_pairs/porownanie_par.png")
 print("\nTworzenie macierzy pomylek dla wszystkich par...")
 
 for cls_a, cls_b in hard_pairs:
-    mask = (y_all == cls_a) | (y_all == cls_b)
+    idx_a = CLASS_TO_IDX.get(cls_a)
+    idx_b = CLASS_TO_IDX.get(cls_b)
+    if idx_a is None or idx_b is None:
+        continue
+
+    mask = (y_all == idx_a) | (y_all == idx_b)
     X = X_all[mask]
     y = y_all[mask]
 
@@ -146,7 +157,6 @@ for cls_a, cls_b in hard_pairs:
         X, y, test_size=0.2, random_state=42, stratify=y
     )
 
-    # Jeden rzad — 3 macierze obok siebie (po jednej na klasyfikator)
     fig, axes = plt.subplots(1, 3, figsize=(14, 4))
     fig.suptitle(f"Macierze pomylek: {cls_a} vs {cls_b}", fontsize=13)
 
@@ -154,7 +164,7 @@ for cls_a, cls_b in hard_pairs:
         y_pred = clf.predict(X_test)
         acc = accuracy_score(y_test, y_pred)
 
-        cm = confusion_matrix(y_test, y_pred, labels=[cls_a, cls_b])
+        cm = confusion_matrix(y_test, y_pred, labels=[idx_a, idx_b])
         disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=[cls_a, cls_b])
         disp.plot(ax=ax, colorbar=False)
         ax.set_title(f"{name}\nacc={acc:.3f}")
@@ -168,7 +178,7 @@ for cls_a, cls_b in hard_pairs:
 #=====[ Tabela zbiorcza ]=====
 
 print("\nTabela zbiorcza trudnych par:")
-header = f"{'Para':<20} {'LR acc':>9} {'ET acc':>9} {'RF acc':>9}"
+header = f"{'Para':<20} {'SVM acc':>9} {'ET acc':>9} {'RF acc':>9}"
 print(header)
 print("-" * 50)
 
@@ -177,7 +187,7 @@ with open("hard_pairs/tabela_trudnych_par.txt", "w", encoding="utf-8") as f:
     f.write("-" * 50 + "\n")
     for r in all_results:
         line = (f"{r['para']:<20} "
-                f"{r['Logistic Regression']['acc']:>9.3f} "
+                f"{r['SVM']['acc']:>9.3f} "
                 f"{r['Extra Trees']['acc']:>9.3f} "
                 f"{r['Random Forest']['acc']:>9.3f}")
         print(line)
